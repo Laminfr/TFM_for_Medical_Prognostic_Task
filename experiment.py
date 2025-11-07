@@ -372,67 +372,75 @@ class DeSurvExperiment(NFGExperiment):
         
         return model
 
-class TabPFNExperiment:
+class TabPFNEmbeddingsExperiment:
     """
-    A experiment class to evaluate TabPFN embeddings or raw tabular data.
+    Extracts embeddings from a TabPFN model for downstream tasks.
 
-    Usage:
-        X, y = load_some_dataset()
-        estimator = e.g. LogisticRegression()
-        exp = TabPFNExperiment(X, y, estimator, use_embeddings=True, test_size=0.5)
-        exp.fit()
-        y_pred = exp.predict()
-
-    Parameters:
-        X (np.ndarray): Feature matrix of shape (n_samples, n_features)
-        y (np.ndarray): Target labels of shape (n_samples,)
-        estimator (sklearn-like object): A downstream model implementing 'fit' and 'predict'
-        use_embeddings (bool): If True, extract TabPFN embeddings to use as input for the estimator
-                               If False, use raw features
-        test_size (float): Fraction of data to use as test set (default: 0.5).
-
-    Attributes:
-        X_train, X_test, y_train, y_test: Training and test splits.
-        model (TabPFNClassifier): The TabPFN model used for embedding extraction.
-        embedder (TabPFNEmbedding or None): Embedding extractor
-        train_embeddings, test_embeddings (np.ndarray): Precomputed embeddings for train/test sets.
+    Usage
+    -----
+    extractor = TabPFNEmbeddingExtractor(X_train, X_test, t_train, e_train)
+    X_train_emb = extractor.train_embeddings
+    X_test_emb = extractor.test_embeddings
     """
-    def __init__(self, X, y, estimator, use_embeddings=True, test_size=0.5):
-        from sklearn.model_selection import train_test_split
+    def __init__(self, X_train, X_test, t_train, e_train):
         from tabpfn import TabPFNClassifier
         from tabpfn_extensions import TabPFNEmbedding
-        self.estimator = estimator
-        self.use_embeddings = use_embeddings
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         self.model = TabPFNClassifier(n_estimators=1)
-        if self.use_embeddings:
-            self.embedder = TabPFNEmbedding(tabpfn_clf=self.model, n_fold=0)
-            self.train_embeddings = self.embedder.get_embeddings(
-                self.X_train,
-                self.y_train,
-                self.X_test,
+        self.embedder = TabPFNEmbedding(tabpfn_clf=self.model, n_fold=0)
+        # pseudo target
+        time_bins = pd.qcut(t_train, q=5, labels=False, duplicates='drop')
+        y_train = time_bins * 2 + e_train.values
+        # get embeddings
+        train_emb = self.embedder.get_embeddings(
+                X_train,
+                y_train,
+                X_test,
                 data_source="train",
-            )
-            self.test_embeddings = self.embedder.get_embeddings(
-                self.X_train,
-                self.y_train,
-                self.X_test,
+        )[0]
+        test_emb = self.embedder.get_embeddings(
+                X_train,
+                y_train,
+                X_test,
                 data_source="test",
-            )
-        else:
-            self.embedder = None
+        )[0]
+        # Wrap embeddings in DataFrames
+        self.train_embeddings = pd.DataFrame(
+            train_emb, columns=[f"x{i}" for i in range(train_emb.shape[1])],
+            index=X_train.index
+        )
+        self.test_embeddings = pd.DataFrame(
+            test_emb, columns=[f"x{i}" for i in range(test_emb.shape[1])],
+            index=X_test.index
+        )
 
+class TARTEEmbeddingsExperiment:
+    """
+        Extracts embeddings from a TARTE model for downstream tasks.
 
-    def fit(self):
-        if self.use_embeddings:
-            X_emb = self.train_embeddings[0]
-        else:
-            X_emb = self.X_train
-        self.estimator.fit(X_emb, self.y_train)
-
-    def predict(self):
-        if self.use_embeddings:
-            X_emb = self.test_embeddings[0]
-        else:
-            X_emb = self.X_test
-        return self.estimator.predict(X_emb)
+    Usage
+    -----
+    extractor = TARTEEmbeddingExtractor(X_train, X_test, t_train, e_train)
+    X_train_emb = extractor.train_embeddings
+    X_test_emb = extractor.test_embeddings
+    """
+    def __init__(self, X_train, X_test, t_train, e_train):
+        from tarte_ai import TARTE_TableEncoder, TARTE_TablePreprocessor
+        from sklearn.pipeline import Pipeline
+        self.tarte_tab_prepper = TARTE_TablePreprocessor()
+        self.tarte_tab_encoder = TARTE_TableEncoder()
+        prep_pipe = Pipeline([("prep", self.tarte_tab_prepper), ("tabenc", self.tarte_tab_encoder)])
+        # pseudo target
+        time_bins = pd.qcut(t_train, q=5, labels=False, duplicates='drop')
+        y_train = time_bins * 2 + e_train.values
+        # get embeddings
+        train_emb = prep_pipe.fit_transform(X_train, y_train)
+        test_emb = prep_pipe.transform(X_test)
+        # Wrap embeddings in DataFrames
+        self.train_embeddings = pd.DataFrame(
+            train_emb, columns=[f"x{i}" for i in range(train_emb.shape[1])],
+            index=X_train.index
+        )
+        self.test_embeddings = pd.DataFrame(
+            test_emb, columns=[f"x{i}" for i in range(test_emb.shape[1])],
+            index=X_test.index
+        )
