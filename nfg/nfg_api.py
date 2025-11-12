@@ -1,4 +1,4 @@
-from dsm.dsm_api import DSMBase
+from auton_survival.models.dsm import DeepSurvivalMachines as DSMBase
 from nfg.nfg_torch import NeuralFineGrayTorch
 from nfg.losses import total_loss, total_loss_cs
 from nfg.utilities import train_nfg
