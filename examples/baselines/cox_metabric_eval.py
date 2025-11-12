@@ -94,7 +94,12 @@ def evaluate_model(cph, X_train, X_val, t_train, t_val, e_train, e_val):
 
 def main():
     print("Loading and preprocessing METABRIC dataset...")
-    X_train, X_val, t_train, t_val, e_train, e_val = load_and_preprocess_data()
+    X_train, X_val, t_train, t_val, e_train, e_val = load_and_preprocess_data(
+        dataset='METABRIC',
+        normalize=True,
+        test_size=0.2,
+        random_state=42
+    )
     
     print(f"Training samples: {len(X_train)}")
     print(f"Validation samples: {len(X_val)}")

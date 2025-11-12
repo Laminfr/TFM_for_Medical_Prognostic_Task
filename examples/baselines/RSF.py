@@ -1,51 +1,43 @@
 import numpy as np
-import xgboost as xgb
+from sksurv.ensemble import RandomSurvivalForest
 from sksurv.metrics import concordance_index_censored, integrated_brier_score
-from sksurv.nonparametric import kaplan_meier_estimator
+from sksurv.util import Surv
 
 # Import the shared data loader
 from .data_loader import load_and_preprocess_data
 
-def train_xgboost_model(X_train, y_train):
-    """Train XGBoost Survival model."""
-    # The Cox objective expects numeric time as the label and the event
-    # indicator as the sample weight.
-    y_time = y_train["time"]
-    y_event = y_train["event"].astype(int)
 
-    # Suggested hyperparameters are a good starting point
-    model = xgb.XGBRegressor(
-        objective="survival:cox",
-        eval_metric="cox-nloglik",
-        n_estimators=200,
-        learning_rate=0.05,
-        max_depth=4,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        random_state=42,
+def train_rsf_model(X_train, y_train, n_estimators=200, max_depth=10, min_samples_split=20, 
+                    min_samples_leaf=10, random_state=42):
+    """Train Random Survival Forest model."""
+    print(f"Training RSF with {n_estimators} trees...")
+    
+    model = RandomSurvivalForest(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        min_samples_split=min_samples_split,
+        min_samples_leaf=min_samples_leaf,
+        random_state=random_state,
+        n_jobs=-1,  # Use all available cores
+        verbose=1
     )
-    model.fit(X_train, y_time, sample_weight=y_event)
+    
+    model.fit(X_train, y_train)
     return model
 
-def evaluate_xgboost_model(model, X_train, X_val, y_train, y_val):
-    """Evaluate XGBoost model."""
+
+def evaluate_rsf_model(model, X_train, X_val, y_train, y_val):
+    """Evaluate Random Survival Forest model."""
     
     # --- C-index using scikit-survival ---
-    risk_scores_train = model.predict(X_train)
-    risk_scores_val = model.predict(X_val)
+    c_index_train = model.score(X_train, y_train)
+    c_index_val = model.score(X_val, y_val)
     
-    c_index_train = concordance_index_censored(
-        y_train['event'], y_train['time'], risk_scores_train
-    )[0]
-    c_index_val = concordance_index_censored(
-        y_val['event'], y_val['time'], risk_scores_val
-    )[0]
+    print(f"C-index (train): {c_index_train:.4f}")
+    print(f"C-index (val):   {c_index_val:.4f}")
 
     # --- Integrated Brier Score ---
-    # Step 1: Estimate the baseline survival function from training data
-    km_times, km_surv_probs = kaplan_meier_estimator(y_train["event"], y_train["time"])
-    
-    # Step 2: Filter validation set to be within the time range of the training data
+    # Filter validation set to be within the time range of the training data
     max_time_train = y_train['time'].max()
     valid_mask = y_val['time'] < max_time_train
     y_val_filtered = y_val[valid_mask]
@@ -62,12 +54,8 @@ def evaluate_xgboost_model(model, X_train, X_val, y_train, y_val):
             "ibs_val": np.nan
         }
     
-    # Apply the same mask to the validation risk scores
-    risk_scores_val_filtered = risk_scores_val[valid_mask]
-    
-    # Step 3: Create safe time grid within the range of filtered validation data
-    # CRITICAL: Time grid must be strictly within the follow-up time of test data
-    max_time_safe = max_time_train * 0.95  # Use 95% of max training time for safety
+    # Create safe time grid within the range of filtered validation data
+    max_time_safe = max_time_train * 0.95
     event_times = y_val_filtered['time'][y_val_filtered['event'].astype(bool)]
     event_times = event_times[event_times < max_time_safe]
     
@@ -81,25 +69,33 @@ def evaluate_xgboost_model(model, X_train, X_val, y_train, y_val):
     print(f"Time grid range: [{time_grid.min():.2f}, {time_grid.max():.2f}]")
     print(f"Max time (train): {max_time_train:.2f}")
     
-    # Interpolate baseline survival at time grid points
-    baseline_surv = np.interp(time_grid, km_times, km_surv_probs)
-
-    # Step 4: Calculate survival probabilities for each sample in the filtered validation set
-    # S(t|x) = S_0(t) ^ exp(risk_score)
-    # Clip risk scores to prevent overflow
-    risk_scores_clipped = np.clip(risk_scores_val_filtered, -10, 10)
+    # Get survival predictions for filtered validation set
+    # RSF returns survival functions directly
+    survival_probs = model.predict_survival_function(X_val_filtered, return_array=True)
     
-    survival_probs = np.row_stack([
-        baseline_surv ** np.exp(risk)
-        for risk in risk_scores_clipped
-    ])
+    # The survival functions are evaluated at the unique event times from training
+    # We need to interpolate to our time grid
+    train_times = model.unique_times_
     
-    ibs = integrated_brier_score(y_train, y_val_filtered, survival_probs, time_grid)
+    # Interpolate survival probabilities to our time grid
+    survival_probs_interpolated = np.zeros((len(y_val_filtered), len(time_grid)))
+    for i in range(len(y_val_filtered)):
+        survival_probs_interpolated[i] = np.interp(
+            time_grid, 
+            train_times, 
+            survival_probs[i],
+            left=1.0,  # Before first time point, survival = 1
+            right=survival_probs[i][-1]  # After last time point, use last value
+        )
+    
+    # Calculate IBS
+    ibs = integrated_brier_score(y_train, y_val_filtered, survival_probs_interpolated, time_grid)
     
     return {"c_index_train": c_index_train, "c_index_val": c_index_val, "ibs_val": ibs}
 
+
 def main(dataset='METABRIC', normalize=True, test_size=0.2, random_state=42):
-    print(f"Loading and preprocessing {dataset} dataset for sksurv...")
+    print(f"Loading and preprocessing {dataset} dataset...")
     X_train, X_val, y_train, y_val = load_and_preprocess_data(
         dataset=dataset,
         normalize=normalize,
@@ -114,15 +110,15 @@ def main(dataset='METABRIC', normalize=True, test_size=0.2, random_state=42):
     print(f"Time range (val):   [{y_val['time'].min():.2f}, {y_val['time'].max():.2f}]")
     print(f"Event rate (train): {y_train['event'].mean():.2%}")
     print(f"Event rate (val):   {y_val['event'].mean():.2%}")
-
-    print("\nTraining XGBoost Survival model...")
-    model = train_xgboost_model(X_train, y_train)
+    
+    print("\nTraining Random Survival Forest model...")
+    model = train_rsf_model(X_train, y_train, n_estimators=200)
     
     print("\nEvaluating model...")
-    metrics = evaluate_xgboost_model(model, X_train, X_val, y_train, y_val)
+    metrics = evaluate_rsf_model(model, X_train, X_val, y_train, y_val)
     
     print("\n" + "="*50)
-    print("XGBOOST MODEL RESULTS")
+    print("RANDOM SURVIVAL FOREST RESULTS")
     print("="*50)
     print(f"C-index (train): {metrics['c_index_train']:.4f}")
     print(f"C-index (val):   {metrics['c_index_val']:.4f}")
@@ -133,6 +129,7 @@ def main(dataset='METABRIC', normalize=True, test_size=0.2, random_state=42):
     print("="*50)
     print("\nNote: C-index computed on full validation set,")
     print("      IBS computed on validation samples with time < max(train time)")
+
 
 if __name__ == "__main__":
     main()
