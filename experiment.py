@@ -103,6 +103,8 @@ class Experiment():
 
     @classmethod
     def save(cls, obj):
+        import os 
+        os.makedirs(os.path.dirname(obj.path), exist_ok=True)
         with open(obj.path + '.pickle', 'wb') as output:
             try:
                 pickle.dump(obj, output)

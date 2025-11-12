@@ -1,0 +1,32 @@
+Loading and preprocessing METABRIC dataset...
+Training samples: 1523
+Validation samples: 381
+Features: 9
+Time range (train): [0.10, 351.00]
+Time range (val):   [0.00, 355.20]
+Event rate (train): 57.91%
+Event rate (val):   58.01%
+
+Training DeepSurv model...
+Using device: cpu
+Epoch 20/100, Loss: 3.3307
+Epoch 40/100, Loss: 3.3065
+Epoch 60/100, Loss: 3.2918
+Epoch 80/100, Loss: 3.2748
+Epoch 100/100, Loss: 3.2844
+
+Evaluating model...
+Validation samples for IBS: 380/381 (99.7%)
+Time grid range: [24.58, 192.15]
+Max time (train): 351.00
+
+==================================================
+DEEPSURV MODEL RESULTS
+==================================================
+C-index (train): 0.7014
+C-index (val):   0.6397
+IBS (val):       0.1876
+==================================================
+
+Note: C-index computed on full validation set,
+      IBS computed on validation samples with time < max(train time)
