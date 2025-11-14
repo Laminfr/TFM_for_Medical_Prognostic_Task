@@ -4,7 +4,7 @@ from sksurv.metrics import concordance_index_censored, integrated_brier_score
 from sksurv.nonparametric import kaplan_meier_estimator
 
 # Import the shared data loader
-from .data_loader import load_and_preprocess_data
+from datasets.data_loader import load_and_preprocess_data
 
 def train_xgboost_model(X_train, y_train):
     """Train XGBoost Survival model."""

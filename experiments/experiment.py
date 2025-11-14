@@ -8,6 +8,10 @@ import time
 import os
 import io
 
+from coxph.coxph_api import CoxPHFG
+from metrics.calibration import integrated_brier_score as nfg_integrated_brier
+from metrics.discrimination import truncated_concordance_td as nfg_cindex_td
+
 class CPU_Unpickler(pickle.Unpickler):
     def find_class(self, module, name):
         if module == 'torch.storage' and name == '_load_from_bytes':
@@ -225,7 +229,7 @@ class Experiment():
 class DSMExperiment(Experiment):
 
     def _fit_(self, x, t, e, x_val, t_val, e_val, hyperparameter, cause_specific):  
-        from dsm import DeepSurvivalMachines
+        from DeepSurvivalMachines.dsm import DeepSurvivalMachines
 
         epochs = hyperparameter.pop('epochs', 1000)
         batch = hyperparameter.pop('batch', 250)
@@ -373,3 +377,81 @@ class DeSurvExperiment(NFGExperiment):
                 lr = lr, val_data = (x_val, t_val, e_val))
         
         return model
+    
+class CoxExperiment(Experiment):
+    """
+    Single-risk CoxPH experiment
+
+    Notes
+    -----
+    - Assumes binary event labels: e ∈ {0,1}. Any e>0 is treated as event.
+    - Uses the *same metrics* module as NFG:
+        * integrated_brier_score (IBS) for model selection (minimize)
+        * truncated_concordance_td for reporting td-C-index if you want
+    """
+
+    def _fit_(self, x, t, e, x_val, t_val, e_val, hyperparameter, cause_specific=False):
+        """
+        Train a single-risk Cox model on (x, t, e).
+
+        Parameters
+        ----------
+        x, x_val : np.ndarray (scaled in Experiment.train)
+        t, t_val : np.ndarray
+        e, e_val : np.ndarray
+        hyperparameter : dict
+            May contain {"penalizer": float}. Anything else is ignored.
+        cause_specific : bool
+            Ignored (single-risk only).
+        """
+        pen = hyperparameter.pop("penalizer", 0.01)
+
+        # CoxPHFG expects pandas
+        X_train = pd.DataFrame(x)
+        T_train = pd.Series(t, name="duration")
+        E_train = pd.Series((e > 0).astype(int), name="event")
+
+        model = CoxPHFG(penalizer=pen)
+        model.fit(X_train, T_train, E_train)
+        return model
+
+    def _nll_(self, model, x_dev, t_dev, e_dev, e_train, t_train):
+        """
+        Selection objective = Integrated Brier Score (lower is better).
+
+        We compute IBS with your NFG metric directly:
+        - risk_predicted_test = 1 - S(t|x) on the dev split
+        - IPCW correction is based on (e_train, t_train)
+        - self.times is the evaluation grid prepared in Experiment.train
+        """
+        X_dev = pd.DataFrame(x_dev)
+        times = np.asarray(self.times, dtype=float)
+
+        # Get survival then convert to "risk at t" matrix (N x K)
+        S = model.predict_survival(X_dev, times)       # [N, K]
+        risk_pred = 1.0 - S
+
+        ibs, _km = nfg_integrated_brier(
+            e_test=e_dev.astype(int),
+            t_test=t_dev.astype(float),
+            risk_predicted_test=risk_pred,
+            times=times,
+            t_eval=None,
+            km=(e_train.astype(int), t_train.astype(float)),  # let utils.estimate_ipcw handle tuple
+            competing_risk=1
+        )
+        return float(ibs)
+
+    def _predict_(self, model, x, r, index):
+        """
+        Produce a DataFrame aligned with save_results():
+        columns are a MultiIndex [(risk=1), time] and rows are in `index`.
+        """
+        X = pd.DataFrame(x)
+        times = np.asarray(self.times, dtype=float)
+        S = model.predict_survival(X, times)  # [N, K]
+        return pd.DataFrame(
+            S,
+            columns=pd.MultiIndex.from_product([[1], times]),
+            index=index
+        )

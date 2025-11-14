@@ -2,8 +2,8 @@
 # Comparsion models for competing risks
 # In this script we train the different models for competing risks
 import sys
-from nfg import datasets
-from experiment import *
+from NeuralFineGray.datasets import datasets
+from NeuralFineGray.experiments.experiment import *
 
 random_seed = 0
 

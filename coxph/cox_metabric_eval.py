@@ -6,7 +6,7 @@ from sksurv.metrics import integrated_brier_score, concordance_index_censored
 from sksurv.util import Surv
 
 # Import the shared data loader
-from .data_loader import load_and_preprocess_data
+from datasets.data_loader import load_and_preprocess_data
 
 
 def train_cox_model(X_train, t_train, e_train):
