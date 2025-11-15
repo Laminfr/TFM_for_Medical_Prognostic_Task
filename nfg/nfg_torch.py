@@ -30,7 +30,6 @@ class PositiveLinear(nn.Module):
     else:
       return nn.functional.linear(input, self.log_weight ** 2)
 
-
 def create_representation_positive(inputdim, layers, dropout = 0):
   modules = []
   act = nn.Tanh()
@@ -74,7 +73,6 @@ def create_representation(inputdim, layers, activation, dropout = 0., norm = Tru
   return modules
 
 class NeuralFineGrayTorch(nn.Module):
-
   def __init__(self, inputdim, layers = [100, 100, 100], act = 'ReLU', layers_surv = [100],
                risks = 1, dropout = 0., optimizer = "Adam", multihead = True):
     super().__init__()

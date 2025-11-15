@@ -1,0 +1,40 @@
+Loading and preprocessing METABRIC dataset...
+Training samples: 1523
+Validation samples: 381
+Features: 9
+Time range (train): [0.10, 351.00]
+Time range (val):   [0.00, 355.20]
+Event rate (train): 57.91%
+Event rate (val):   58.01%
+
+Training Cox Proportional Hazards model...
+
+Model Summary:
+                      coef  exp(coef)             p
+covariate                                          
+MKI67             0.010895   1.010955  7.896713e-01
+EGFR             -0.057347   0.944267  1.382166e-01
+PGR               0.112424   1.118987  1.130113e-03
+ERBB2             0.078495   1.081658  2.798761e-02
+Hormone           0.090210   1.094404  1.835388e-02
+Radiotherapy     -0.077590   0.925344  2.430953e-02
+Chemotherapy      0.322002   1.379887  4.851938e-13
+ER-positive       0.004729   1.004740  9.216996e-01
+Age at diagnosis  0.573926   1.775222  5.574434e-39
+
+Evaluating model...
+Validation samples for IBS: 380/381 (99.7%)
+Time grid range: [24.58, 192.15]
+Max time (train): 351.00
+
+==================================================
+RESULTS
+==================================================
+C-index (train): 0.6384
+C-index (val):   0.6282
+IBS (val):       0.1872
+==================================================
+
+Note: C-index computed directly from risk scores
+      IBS computed using NeuralFineGray metrics
+      Validation IBS computed on samples with time < max(train time)

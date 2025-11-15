@@ -1,0 +1,29 @@
+Loading and preprocessing METABRIC dataset for sksurv...
+Training samples: 1523
+Validation samples: 381
+Features: 9
+Time range (train): [0.10, 351.00]
+Time range (val):   [0.00, 355.20]
+Event rate (train): 57.91%
+Event rate (val):   58.01%
+
+Training XGBoost Survival model...
+
+Evaluating model...
+C-index (train): 0.7377
+C-index (val):   0.6125
+Validation samples for IBS: 380/381 (99.7%)
+Time grid range: [24.58, 192.15]
+Max time (train): 351.00
+
+==================================================
+XGBOOST MODEL RESULTS
+==================================================
+C-index (train): 0.7377
+C-index (val):   0.6125
+IBS (val):       0.6044
+==================================================
+
+Note: C-index computed directly from risk scores
+      IBS computed using NeuralFineGray metrics with survival curves
+      Validation IBS computed on samples with time < max(train time)

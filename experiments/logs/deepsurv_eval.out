@@ -1,0 +1,33 @@
+Loading and preprocessing METABRIC dataset...
+Training samples: 1523
+Validation samples: 381
+Features: 9
+Time range (train): [0.10, 351.00]
+Time range (val):   [0.00, 355.20]
+Event rate (train): 57.91%
+Event rate (val):   58.01%
+
+Training DeepSurv model...
+Using device: cuda
+Epoch 20/100, Loss: 3.3174
+Epoch 40/100, Loss: 3.3049
+Epoch 60/100, Loss: 3.3060
+Epoch 80/100, Loss: 3.3108
+Epoch 100/100, Loss: 3.2890
+
+Evaluating model...
+Validation samples for evaluation: 380/381 (99.7%)
+Time grid range: [24.58, 192.15]
+Max time (train): 351.00
+
+==================================================
+DEEPSURV MODEL RESULTS
+==================================================
+C-index (train): 0.7018
+C-index (val):   0.6453
+IBS (val):       0.1889
+==================================================
+
+Note: C-index and IBS computed using NeuralFineGray metrics
+      for single event survival analysis (competing_risk=1)
+      Validation metrics computed on samples with time < max(train time)
