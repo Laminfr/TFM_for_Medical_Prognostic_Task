@@ -4,7 +4,7 @@ from tarte_ai import TARTE_TableEncoder, TARTE_TablePreprocessor
 from sklearn.pipeline import Pipeline
 
 """
-Extracts embeddings from a TARTE model for downstream tasks.
+Extracts embeddings from TARTE for downstream tasks
 """
 def get_embeddings_tarte(X_train, X_test):
     tarte_tab_prepper = TARTE_TablePreprocessor()
@@ -24,6 +24,33 @@ def get_embeddings_tarte(X_train, X_test):
     )
     return train_embeddings, test_embeddings
 
+"""
+Extracts embeddings from TARTE by using a dummy target y
+"""
+def get_embeddings_dummy_tarte(X_train, X_test):
+    tarte_tab_prepper = TARTE_TablePreprocessor()
+    tarte_tab_encoder = TARTE_TableEncoder()
+    prep_pipe = Pipeline([("prep", tarte_tab_prepper), ("tabenc", tarte_tab_encoder)])
+    # dummy variable
+    y_dummy = pd.Series(1, index=np.arange(len(X_train)))
+    # get embeddings
+    train_emb = prep_pipe.fit_transform(X_train, y_dummy)
+    test_emb = prep_pipe.transform(X_test)
+    # Wrap embeddings in DataFrames
+    train_embeddings = pd.DataFrame(
+        train_emb, columns=[f"x{i}" for i in range(train_emb.shape[1])],
+        index=X_train.index
+    )
+    test_embeddings = pd.DataFrame(
+        test_emb, columns=[f"x{i}" for i in range(test_emb.shape[1])],
+        index=X_test.index
+    )
+    return train_embeddings, test_embeddings
+
+"""
+Extracts embeddings from TARTE by using time and event as targets separately 
+    and concatenate the respective embeddings
+"""
 def get_embeddings_combination_tarte(X_train, X_test, t_train, e_train):
     tarte_tab_prepper = TARTE_TablePreprocessor()
     tarte_tab_encoder = TARTE_TableEncoder()
@@ -41,26 +68,6 @@ def get_embeddings_combination_tarte(X_train, X_test, t_train, e_train):
         test_emb_event = prep_pipe.transform(X_test)
     train_emb = np.concatenate([train_emb_time, train_emb_event], axis=1)
     test_emb = np.concatenate([test_emb_time, test_emb_event], axis=1)
-    # Wrap embeddings in DataFrames
-    train_embeddings = pd.DataFrame(
-        train_emb, columns=[f"x{i}" for i in range(train_emb.shape[1])],
-        index=X_train.index
-    )
-    test_embeddings = pd.DataFrame(
-        test_emb, columns=[f"x{i}" for i in range(test_emb.shape[1])],
-        index=X_test.index
-    )
-    return train_embeddings, test_embeddings
-
-def get_embeddings_dummy_tarte(X_train, X_test):
-    tarte_tab_prepper = TARTE_TablePreprocessor()
-    tarte_tab_encoder = TARTE_TableEncoder()
-    prep_pipe = Pipeline([("prep", tarte_tab_prepper), ("tabenc", tarte_tab_encoder)])
-    # dummy variable
-    y_dummy = pd.Series(1, index=np.arange(len(X_train)))
-    # get embeddings
-    train_emb = prep_pipe.fit_transform(X_train, y_dummy)
-    test_emb = prep_pipe.transform(X_test)
     # Wrap embeddings in DataFrames
     train_embeddings = pd.DataFrame(
         train_emb, columns=[f"x{i}" for i in range(train_emb.shape[1])],

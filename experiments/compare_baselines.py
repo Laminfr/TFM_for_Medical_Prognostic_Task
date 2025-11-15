@@ -3,14 +3,6 @@ Compare all baseline models by running them sequentially and collecting results.
 """
 import time
 import numpy as np
-import pandas as pd
-if not hasattr(pd.Series, "iteritems"):
-    pd.Series.iteritems = pd.Series.items
-_old_describe = pd.DataFrame.describe
-def _describe_compat(self, *args, **kwargs):
-    kwargs.pop("datetime_is_numeric", None)
-    return _old_describe(self, *args, **kwargs)
-pd.DataFrame.describe = _describe_compat
 from tabulate import tabulate
 
 # Import all baseline models
