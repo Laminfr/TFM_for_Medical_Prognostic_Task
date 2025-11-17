@@ -8,6 +8,10 @@ import time
 import os
 import io
 
+from coxph.coxph_api import CoxPHFG
+from metrics.calibration import integrated_brier_score as nfg_integrated_brier
+from metrics.discrimination import truncated_concordance_td as nfg_cindex_td
+
 class CPU_Unpickler(pickle.Unpickler):
     def find_class(self, module, name):
         if module == 'torch.storage' and name == '_load_from_bytes':
@@ -225,7 +229,7 @@ class Experiment():
 class DSMExperiment(Experiment):
 
     def _fit_(self, x, t, e, x_val, t_val, e_val, hyperparameter, cause_specific):  
-        from dsm import DeepSurvivalMachines
+        from DeepSurvivalMachines.dsm import DeepSurvivalMachines
 
         epochs = hyperparameter.pop('epochs', 1000)
         batch = hyperparameter.pop('batch', 250)
@@ -373,3 +377,61 @@ class DeSurvExperiment(NFGExperiment):
                 lr = lr, val_data = (x_val, t_val, e_val))
         
         return model
+    
+class CoxExperiment(Experiment):
+    def _fit_(self, x, t, e, x_val, t_val, e_val, hyperparameter, cause_specific=False):
+        pen = hyperparameter.pop("penalizer", 0.01)
+
+        # CoxPHFG expects pandas
+        X_train = pd.DataFrame(x)
+        T_train = pd.Series(t, name="duration")
+        E_train = pd.Series((e > 0).astype(int), name="event")
+
+        model = CoxPHFG(penalizer=pen)
+        model.fit(X_train, T_train, E_train)
+        return model
+
+    def _nll_(self, model, x_dev, t_dev, e_dev, e_train, t_train):
+        X_dev = pd.DataFrame(x_dev)
+        times = np.asarray(self.times, dtype=float)
+
+        S = model.predict_survival(X_dev, times)
+        risk_pred = 1.0 - S
+
+        ibs, _km = nfg_integrated_brier(
+            e_test=e_dev.astype(int),
+            t_test=t_dev.astype(float),
+            risk_predicted_test=risk_pred,
+            times=times,
+            t_eval=None,
+            km=(e_train.astype(int), t_train.astype(float)),
+            competing_risk=1
+        )
+        return float(ibs)
+
+    def _predict_(self, model, x, r, index):
+        X = pd.DataFrame(x)
+        times = np.asarray(self.times, dtype=float)
+        S = model.predict_survival(X, times)
+        return pd.DataFrame(
+            S,
+            columns=pd.MultiIndex.from_product([[1], times]),
+            index=index
+        )
+
+class RSFExperiment(Experiment):
+    def _fit_(self, x, t, e, x_val, t_val, e_val, hyperparameter, cause_specific=False):
+        pass
+    def _nll_(self, model, x_dev, t_dev, e_dev, e_train, t_train):
+        pass
+    def _predict_(self, model, x, r, index):
+        pass
+
+class XGBoostExperiment(Experiment):
+    def _fit_(self, x, t, e, x_val, t_val, e_val, hyperparameter, cause_specific=False):
+        pass
+    def _nll_(self, model, x_dev, t_dev, e_dev, e_train, t_train):
+        pass
+    def _predict_(self, model, x, r, index):
+        pass
+

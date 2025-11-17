@@ -1,4 +1,4 @@
-from dsm.datasets import load_dataset as load_dsm
+from DeepSurvivalMachines.dsm.datasets import load_dataset as load_dsm
 from sklearn.preprocessing import StandardScaler, OrdinalEncoder
 from sklearn.impute import SimpleImputer
 from pycox import datasets

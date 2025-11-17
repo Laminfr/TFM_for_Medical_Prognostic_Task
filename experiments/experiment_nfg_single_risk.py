@@ -1,6 +1,6 @@
 import sys
-from nfg import datasets
-from experiment import NFGExperiment
+from NeuralFineGray.datasets import datasets
+from NeuralFineGray.experiments.experiment import NFGExperiment
 
 random_seed = 0
 

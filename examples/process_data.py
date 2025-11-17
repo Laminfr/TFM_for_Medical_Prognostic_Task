@@ -1,7 +1,7 @@
 # This script extracts the different fold to then use the fine gray R script
 import sys
-from nfg import datasets
-from experiment import *
+from NeuralFineGray.datasets import datasets
+from NeuralFineGray.experiments.experiment import *
 
 random_seed = 0
 
