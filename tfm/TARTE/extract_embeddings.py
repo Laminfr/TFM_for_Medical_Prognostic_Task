@@ -1,4 +1,4 @@
-import pandas as pd
+from pandas_patch import pd
 import numpy as np
 from tarte_ai import TARTE_TableEncoder, TARTE_TablePreprocessor
 from sklearn.pipeline import Pipeline

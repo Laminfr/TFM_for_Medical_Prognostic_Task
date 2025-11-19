@@ -4,7 +4,7 @@ Experiment with TARTE embedding extraction.
 Compare all baseline models by running them sequentially and collecting results.
 """
 import time
-import pandas as pd
+from pandas_patch import pd
 import warnings
 warnings.filterwarnings("ignore", message="TypedStorage is deprecated")
 import seaborn as sns
