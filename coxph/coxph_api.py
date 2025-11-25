@@ -1,126 +1,72 @@
-"""
-CoxPHFG — single-risk Cox model with NFG-like API and NFG metrics.
-
-- Assumes binary event: e ∈ {0,1}. Any e>0 is treated as 1.
-- Provides: fit, predict_survival, ibs (Integrated Brier Score),
-  c_index_td (time-dependent truncated concordance).
-"""
-
-from __future__ import annotations
-from typing import List, Optional
+from nfg.nfg_api import NeuralFineGray
 import numpy as np
 import pandas as pd
-from lifelines import CoxPHFitter
+from .utilities import *
 
 from metrics.calibration import integrated_brier_score as nfg_integrated_brier
 from metrics.discrimination import truncated_concordance_td as nfg_cindex_td
 
 
-class CoxPHFG:
-    """
-    Single-risk Cox Proportional Hazards with an NFG-like API.
+class CoxPHFG(NeuralFineGray):
 
-    Parameters
-    ----------
-    penalizer : float
-        L2 penalty for lifelines' CoxPHFitter.
-    """
-
-    def __init__(self, penalizer: float = 0.01):
+    def __init__(self, penalizer = 0.01):
+        super().__init__()
+        self.cuda = 0
         self.penalizer = penalizer
-        self.model: Optional[CoxPHFitter] = None
-        self.fitted = False
-        self._train_t: Optional[pd.Series] = None
-        self._train_e: Optional[pd.Series] = None
+        self.model = None
+        self.eval_params = None
 
     # ---------------- fitting ----------------
 
-    def fit(self, X: pd.DataFrame, t: pd.Series, e: pd.Series) -> "CoxPHFG":
-        """
-        Fit a single-risk Cox model: event = (e > 0).
-        """
-        self._train_t = t.copy()
-        self._train_e = (e > 0).astype(int).copy()
+    def fit(self, x, t, e, vsize = 0.15, val_data = None, random_state = 100):
 
-        df = pd.concat(
-            [X,
-             t.rename("duration"),
-             (e > 0).astype(int).rename("event")],
-            axis=1
-        )
-        cph = CoxPHFitter(penalizer=self.penalizer)
-        cph.fit(df, duration_col="duration", event_col="event")
-        self.model = cph
+        processed_data = self._preprocess_training_data(x, t, e, vsize, val_data, random_state)
+        x_train, t_train, e_train, x_val, t_val, e_val = processed_data
+
+        t_train = super()._normalise(t_train, save = True)
+        t_val = super()._normalise(t_val)
+
+        x_train = np.asarray(x_train)
+        t_train = np.asarray(t_train)
+        x_val = np.asarray(x_val)
+        t_val = np.asarray(t_val)
+
+        # if E_train is a tensor: to CPU → numpy
+        if hasattr(e_train, "detach"):
+            e_train = e_train.detach().cpu().numpy()
+        else:
+            e_train = np.asarray(e_train)
+
+        # if e_val is a tensor: to CPU → numpy
+        if hasattr(e_val, "detach"):
+            e_val = e_val.detach().cpu().numpy()
+        else:
+            e_val = np.asarray(e_val)
+
+        x_train = pd.DataFrame(x_train)
+        t_train = pd.Series(t_train, name="duration")
+        e_train = pd.Series((e_train > 0).astype(int), name="event")
+
+        x_val = pd.DataFrame(x_val)
+        t_val = pd.Series(t_val, name="duration")
+        e_val = pd.Series((e_val > 0).astype(int), name="event")
+
+        self.model = train_cox_model(x_train, t_train, e_train, self.penalizer)
+        self.eval_params = evaluate_model(self.model, x_train, x_val, t_train, t_val, e_train, e_val)
+        summary_output(self.model, x_train, t_train, e_train, x_val, t_val, e_val, self.eval_params)
         self.fitted = True
         return self
 
     # ------------- predictions -------------
 
-    def predict_survival(self, X: pd.DataFrame, times: List[float] | np.ndarray) -> np.ndarray:
-        """
-        Survival probabilities S(t|x) at given times.
-        """
+    def predict_survival(self):
         if not self.fitted or self.model is None:
             raise RuntimeError("Call fit() first.")
-        times = np.asarray(times, dtype=float)
-        if times.ndim == 0:
-            times = np.array([float(times)])
-        sf = self.model.predict_survival_function(X, times=times)
-        return sf.T.values  # [N, len(times)]
+        return self.eval_params['surv_probs']
 
-    def predict_risk_matrix(self, X: pd.DataFrame, times: np.ndarray) -> np.ndarray:
-        """
-        Return risk at times as NxK matrix (what NFG metrics expect):
-        risk(t|x) = 1 - S(t|x).
-        """
-        S = self.predict_survival(X, times)
-        return 1.0 - S
 
-    # ------------- NFG metrics wrappers (single risk) -------------
-
-    def ibs(self,
-            X_train: pd.DataFrame, t_train: pd.Series, e_train: pd.Series,
-            X_test: pd.DataFrame,  t_test: pd.Series,  e_test: pd.Series,
-            times: np.ndarray, t_eval: Optional[np.ndarray] = None) -> float:
-        """
-        Integrated Brier Score using your NFG calibration metric.
-        """
-        if not self.fitted:
+    def predict_risk_matrix(self):
+        if not self.fitted or self.model is None:
             raise RuntimeError("Call fit() first.")
+        return 1.0 - self.eval_params['surv_probs']
 
-        times = np.asarray(times, dtype=float)
-        risk_pred = self.predict_risk_matrix(X_test, times)  # (N, K)
-
-        ibs, _km = nfg_integrated_brier(
-            e_test.values.astype(int),
-            t_test.values.astype(float),
-            risk_pred,
-            times,
-            t_eval=None if t_eval is None else np.asarray(t_eval, dtype=float),
-            km=((e_train > 0).astype(int).values, t_train.values.astype(float)),
-            competing_risk=1  # single risk
-        )
-        return float(ibs)
-
-    def c_index_td(self,
-                   X_test: pd.DataFrame, t_test: pd.Series, e_test: pd.Series,
-                   times: np.ndarray, t: Optional[float] = None) -> float:
-        """
-        Time-dependent truncated concordance using your NFG discrimination metric.
-        """
-        if not self.fitted:
-            raise RuntimeError("Call fit() first.")
-
-        times = np.asarray(times, dtype=float)
-        risk_pred = self.predict_risk_matrix(X_test, times)
-
-        ctd, _km = nfg_cindex_td(
-            e_test.values.astype(int),
-            t_test.values.astype(float),
-            risk_pred,
-            times,
-            t=None if t is None else float(t),
-            km=((self._train_e > 0).astype(int).values, self._train_t.values.astype(float)),
-            competing_risk=1  # single risk
-        )
-        return float(ctd)
