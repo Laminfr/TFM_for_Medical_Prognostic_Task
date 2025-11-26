@@ -9,6 +9,8 @@ import os
 import io
 
 from coxph.coxph_api import CoxPHFG
+from metrics.calibration import integrated_brier_score as nfg_integrated_brier
+from metrics.discrimination import truncated_concordance_td as nfg_cindex_td
 
 class CPU_Unpickler(pickle.Unpickler):
     def find_class(self, module, name):

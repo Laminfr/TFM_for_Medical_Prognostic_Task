@@ -1,15 +1,8 @@
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
+from pycox.datasets import metabric
 from sksurv.util import Surv
-
-# Import the NFG dataset loader directly, bypassing __init__.py
-import sys
-from pathlib import Path
-
-# Add the nfg directory to path
-nfg_path = Path(__file__).parent.parent.parent / "nfg"
-if str(nfg_path) not in sys.path:
-    sys.path.insert(0, str(nfg_path.parent))
 
 # Import directly from the datasets module
 from .datasets import load_dataset
