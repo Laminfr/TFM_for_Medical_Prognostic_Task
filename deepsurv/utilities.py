@@ -6,7 +6,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from lifelines import KaplanMeierFitter
 
 # Import the shared data loader
-from .data_loader import load_and_preprocess_data
+from ..datasets.data_loader import load_and_preprocess_data
 
 # Import metrics from neuralfg repository
 import sys

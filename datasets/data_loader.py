@@ -12,7 +12,7 @@ if str(nfg_path) not in sys.path:
     sys.path.insert(0, str(nfg_path.parent))
 
 # Import directly from the datasets module
-from nfg.datasets import load_dataset
+from .datasets import load_dataset
 
 
 def load_and_preprocess_data(dataset='METABRIC', normalize=True, test_size=0.2, 
