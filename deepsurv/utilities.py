@@ -6,7 +6,11 @@ from torch.utils.data import TensorDataset, DataLoader
 from lifelines import KaplanMeierFitter
 
 # Import the shared data loader
+<<<<<<<< HEAD:deepsurv/utilities.py
+from ..datasets.data_loader import load_and_preprocess_data
+========
 from datasets.data_loader import load_and_preprocess_data
+>>>>>>>> TFM:deepsurv/DeepSurv.py
 
 # Import metrics from neuralfg repository
 import sys

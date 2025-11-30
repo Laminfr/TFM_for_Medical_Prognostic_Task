@@ -2,7 +2,11 @@ import numpy as np
 from sksurv.ensemble import RandomSurvivalForest
 
 # Import the shared data loader
+<<<<<<<< HEAD:rsf/utilities.py
+from ..datasets.data_loader import load_and_preprocess_data
+========
 from datasets.data_loader import load_and_preprocess_data
+>>>>>>>> TFM:RSF/RSF.py
 
 # Import metrics from neuralfg repository
 import sys

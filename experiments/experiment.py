@@ -9,8 +9,6 @@ import os
 import io
 
 from coxph.coxph_api import CoxPHFG
-
-from coxph.coxph_api import CoxPHFG
 from metrics.calibration import integrated_brier_score as nfg_integrated_brier
 from metrics.discrimination import truncated_concordance_td as nfg_cindex_td
 
@@ -379,13 +377,13 @@ class DeSurvExperiment(NFGExperiment):
                 lr = lr, val_data = (x_val, t_val, e_val))
         
         return model
-
+    
 class CoxExperiment(Experiment):
     def _fit_(self, x, t, e, x_val, t_val, e_val, hyperparameter, cause_specific=False):
         pen = hyperparameter.pop("penalizer", 0.01)
         model = CoxPHFG(penalizer=pen)
         model.fit(x = x,
-                  t = t,
+                  t = t, 
                   e = e,
                   val_data = (x_val, t_val, e_val))
         return model

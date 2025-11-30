@@ -5,7 +5,7 @@ from pycox.datasets import metabric
 from sksurv.util import Surv
 
 # Import directly from the datasets module
-from datasets.datasets import load_dataset
+from .datasets import load_dataset
 
 
 def load_and_preprocess_data(dataset='METABRIC', normalize=True, test_size=0.2, 

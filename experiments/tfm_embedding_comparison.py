@@ -12,12 +12,12 @@ import matplotlib.pyplot as plt
 import sys
 sys.path.append("/")
 
-from datasets.data_loader import load_and_preprocess_data
-from coxph.cox_metabric_eval import train_cox_model, evaluate_model as evaluate_cox
-from xgb.train_xgboost import train_xgboost_model, evaluate_xgboost_model
-from deepsurv.DeepSurv import train_deepsurv_model, evaluate_deepsurv_model
-from RSF.RSF import train_rsf_model, evaluate_rsf_model
-from tfm.TARTE.extract_embeddings import get_embeddings_tarte, get_embeddings_dummy_tarte, get_embeddings_combination_tarte
+from ..datasets.data_loader import load_and_preprocess_data
+from ..coxph.utilities import train_cox_model, evaluate_model as evaluate_cox
+from ..xgboost.utilities import train_xgboost_model, evaluate_xgboost_model
+from ..deepsurv.utilities import train_deepsurv_model, evaluate_deepsurv_model
+from ..rsf.utilities import train_rsf_model, evaluate_rsf_model
+from ..tfm.TARTE.extract_embeddings import get_embeddings_tarte, get_embeddings_dummy_tarte, get_embeddings_combination_tarte
 
 def plot_results_absolute(df_all):
     import os
