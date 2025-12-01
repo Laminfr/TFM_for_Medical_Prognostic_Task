@@ -19,10 +19,21 @@ except ImportError:
 
 EPS = 1e-8
 
-def load_dataset(dataset='SUPPORT', path='./', normalize=True, **kwargs):
+def load_dataset(dataset='SUPPORT', path='./', normalize=True, return_raw=False, **kwargs):
     """
     Load survival datasets. Supports METABRIC, GBSG, SYNTHETIC, SEER via pycox/custom,
     and others via auton_survival if available.
+    
+    Args:
+        dataset: Dataset name
+        path: Path for data files
+        normalize: Whether to standardize features
+        return_raw: If True, also return raw DataFrame with original string/categorical values
+        **kwargs: Additional arguments
+    
+    Returns:
+        If return_raw=False: (X, T, E, feature_names)
+        If return_raw=True: (X, T, E, feature_names, df_raw)
     """
     if dataset == 'GBSG':
         df = datasets.gbsg.read_df()
@@ -51,17 +62,84 @@ def load_dataset(dataset='SUPPORT', path='./', normalize=True, **kwargs):
                 "These were not found (likely due to environment conflicts with TabICL). "
                 "Please use 'METABRIC', 'GBSG', or 'SEER'."
             )
-        return load_dsm(dataset, normalize=normalize, **kwargs)
+        # auton_survival returns different formats depending on dataset
+        result = load_dsm(dataset)
+        
+        if dataset.upper() == 'PBC':
+            # PBC returns (X, T, E) as numpy arrays
+            X_raw, T, E = result
+            feature_names = [f'feat_{i}' for i in range(X_raw.shape[1])]
+            df_raw = pd.DataFrame(X_raw, columns=feature_names) if return_raw else None
+            if normalize:
+                X = StandardScaler().fit_transform(X_raw).astype(float)
+            else:
+                X = X_raw.astype(float)
+            if return_raw:
+                return X, T.astype(float), E.astype(int), feature_names, df_raw
+            return X, T.astype(float), E.astype(int), feature_names
+            
+        elif dataset.upper() == 'SUPPORT':
+            # SUPPORT returns (outcomes_df, features_df)
+            outcomes, features = result
+            T = outcomes['time'].values.astype(float)
+            E = outcomes['event'].values.astype(int)
+            feature_names = features.columns.tolist()
+            df_raw = features.copy() if return_raw else None
+            
+            # Encode categorical features and impute missing values
+            features_encoded = features.copy()
+            for col in features_encoded.columns:
+                if features_encoded[col].dtype == 'object':
+                    # Fill NaN with 'missing' before encoding
+                    features_encoded[col] = features_encoded[col].fillna('missing')
+                    features_encoded[col] = OrdinalEncoder().fit_transform(
+                        features_encoded[[col]]
+                    ).flatten()
+            
+            # Impute remaining numerical NaNs with median
+            imputer = SimpleImputer(strategy='median')
+            features_imputed = imputer.fit_transform(features_encoded.values)
+            
+            if normalize:
+                X = StandardScaler().fit_transform(features_imputed).astype(float)
+            else:
+                X = features_imputed.astype(float)
+            if return_raw:
+                return X, T, E, feature_names, df_raw
+            return X, T, E, feature_names
+        else:
+            # Generic fallback - assume (X, T, E) format
+            if len(result) == 3:
+                X_raw, T, E = result
+                feature_names = [f'feat_{i}' for i in range(X_raw.shape[1])]
+                df_raw = pd.DataFrame(X_raw, columns=feature_names) if return_raw else None
+                if normalize:
+                    X = StandardScaler().fit_transform(X_raw).astype(float)
+                else:
+                    X = X_raw.astype(float)
+                if return_raw:
+                    return X, T.astype(float), E.astype(int), feature_names, df_raw
+                return X, T.astype(float), E.astype(int), feature_names
+            else:
+                raise ValueError(f"Unknown dataset format for '{dataset}': got {len(result)} elements")
 
     covariates = df.drop(['duration', 'event'], axis='columns')
+    
+    # Store raw DataFrame before processing
+    df_raw = covariates.copy() if return_raw else None
     
     # Handle normalization
     if normalize:
         X = StandardScaler().fit_transform(covariates.values).astype(float)
     else:
         X = covariates.values.astype(float)
-        
-    return X, df['duration'].values.astype(float), df['event'].values.astype(int), covariates.columns
+    
+    T = df['duration'].values.astype(float)
+    E = df['event'].values.astype(int)
+    
+    if return_raw:
+        return X, T, E, covariates.columns, df_raw
+    return X, T, E, covariates.columns
 
 
 def load_dataset_with_splits(

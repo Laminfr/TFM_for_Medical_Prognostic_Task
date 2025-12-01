@@ -2,6 +2,11 @@
 TabICL Embedding Extractor for Survival Analysis
 Updated version with improved deep encoder embedding extraction.
 Fixes shape mismatch by correctly handling (1, N, D) output tensors.
+
+Features:
+- One-hot encoding for categorical features in deep+raw mode
+- Optional PCA compression for tree-based models
+- Proper handling of string columns in raw data
 """
 
 import numpy as np
@@ -9,6 +14,8 @@ import pandas as pd
 from typing import Tuple, Optional, Union, List
 import warnings
 import torch
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.decomposition import PCA
 
 try:
     from tabicl import TabICLClassifier
@@ -28,12 +35,10 @@ def _extract_row_embeddings(clf, X_df: pd.DataFrame, split_name: str, device: st
             if hasattr(clf, '_load_model'):
                 clf._load_model()
             else:
-                print("DEBUG: TabICL classifier has no model_ attribute")
                 return None
 
         model = clf.model_
         if not hasattr(model, 'row_interactor'):
-            print("DEBUG: TabICL model has no row_interactor module")
             return None
 
         model.eval()
@@ -71,14 +76,12 @@ def _extract_row_embeddings(clf, X_df: pd.DataFrame, split_name: str, device: st
         try:
             with torch.no_grad():
                 _ = clf.predict_proba(X_df)
-        except Exception as exc:
-            print(f"DEBUG: predict_proba failed for split '{split_name}': {exc}")
+        except Exception:
             return None
         finally:
             hook_handle.remove()
 
         if not captured_batches:
-            print(f"DEBUG: No row_interactor outputs captured for split '{split_name}'")
             return None
 
         # Concatenate all captured batches
@@ -99,18 +102,93 @@ def _extract_row_embeddings(clf, X_df: pd.DataFrame, split_name: str, device: st
             embeddings = embeddings[-expected_rows:]
         
         if embeddings.shape[0] != expected_rows:
-            print(f"DEBUG: Shape mismatch. Expected {expected_rows} rows, got {embeddings.shape[0]}. Shape: {embeddings.shape}")
-            # If we missed rows, we can't use this embedding.
             return None
 
-        print(f"DEBUG: Extracted embeddings for split '{split_name}' with shape {embeddings.shape}")
         return embeddings.numpy()
 
-    except Exception as exc:
-        print(f"DEBUG: Exception during row embedding extraction for split '{split_name}': {exc}")
-        import traceback
-        traceback.print_exc()
+    except Exception:
         return None
+
+
+def _encode_categorical_features(X_train: np.ndarray, X_val: np.ndarray, X_test: np.ndarray, 
+                                  feature_names: list, verbose: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray, list]:
+    """
+    Detect and one-hot encode categorical (string) features in raw data.
+    Returns encoded arrays and updated feature names.
+    """
+    # Convert to DataFrame to detect dtypes
+    df_train = pd.DataFrame(X_train, columns=feature_names)
+    df_val = pd.DataFrame(X_val, columns=feature_names)
+    df_test = pd.DataFrame(X_test, columns=feature_names)
+    
+    # Find string/object columns
+    cat_cols = []
+    num_cols = []
+    for col in df_train.columns:
+        if df_train[col].dtype == 'object' or df_train[col].dtype.name == 'category':
+            cat_cols.append(col)
+        else:
+            # Try to convert to numeric, if it fails it's categorical
+            try:
+                pd.to_numeric(df_train[col].iloc[0])
+                num_cols.append(col)
+            except (ValueError, TypeError):
+                cat_cols.append(col)
+    
+    if not cat_cols:
+        # No categorical columns, return as-is
+        return X_train.astype(float), X_val.astype(float), X_test.astype(float), feature_names
+    
+    if verbose:
+        print(f"  → One-hot encoding {len(cat_cols)} categorical columns: {cat_cols}")
+    
+    # Fit OneHotEncoder on training data
+    encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+    X_train_cat = encoder.fit_transform(df_train[cat_cols])
+    X_val_cat = encoder.transform(df_val[cat_cols])
+    X_test_cat = encoder.transform(df_test[cat_cols])
+    
+    # Get encoded feature names
+    encoded_names = encoder.get_feature_names_out(cat_cols).tolist()
+    
+    # Extract numeric columns
+    X_train_num = df_train[num_cols].values.astype(float)
+    X_val_num = df_val[num_cols].values.astype(float)
+    X_test_num = df_test[num_cols].values.astype(float)
+    
+    # Combine: numeric + encoded categorical
+    X_train_enc = np.column_stack([X_train_num, X_train_cat]) if len(num_cols) > 0 else X_train_cat
+    X_val_enc = np.column_stack([X_val_num, X_val_cat]) if len(num_cols) > 0 else X_val_cat
+    X_test_enc = np.column_stack([X_test_num, X_test_cat]) if len(num_cols) > 0 else X_test_cat
+    
+    new_feature_names = num_cols + encoded_names
+    
+    return X_train_enc, X_val_enc, X_test_enc, new_feature_names
+
+
+def _apply_pca_compression(X_train_emb: np.ndarray, X_val_emb: np.ndarray, X_test_emb: np.ndarray,
+                           n_components: int = 32, verbose: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray, PCA]:
+    """
+    Apply PCA to compress high-dimensional embeddings.
+    Fits on training data only to prevent leakage.
+    
+    Args:
+        n_components: Target dimensions (default 32 for tree models)
+        
+    Returns:
+        Compressed embeddings and fitted PCA object
+    """
+    pca = PCA(n_components=min(n_components, X_train_emb.shape[1], X_train_emb.shape[0]))
+    
+    X_train_pca = pca.fit_transform(X_train_emb)
+    X_val_pca = pca.transform(X_val_emb)
+    X_test_pca = pca.transform(X_test_emb)
+    
+    if verbose:
+        explained_var = pca.explained_variance_ratio_.sum() * 100
+        print(f"  → PCA: {X_train_emb.shape[1]}D → {X_train_pca.shape[1]}D ({explained_var:.1f}% variance)")
+    
+    return X_train_pca, X_val_pca, X_test_pca, pca
 
 
 def apply_tabicl_embedding(
@@ -122,19 +200,29 @@ def apply_tabicl_embedding(
     verbose: bool = True,
     use_deep_embeddings: bool = True,
     concat_with_raw: bool = True,
+    pca_for_trees: bool = False,
+    pca_n_components: int = 32,
     **tabicl_kwargs
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, object]:
     """
     Apply TabICL embedding extraction to train/val/test splits.
+    
+    Args:
+        X_train, X_val, X_test: Feature arrays
+        E_train: Event indicator for training
+        feature_names: List of feature names
+        use_deep_embeddings: Extract 512D embeddings from row_interactor
+        concat_with_raw: Concatenate embeddings with raw features (deep+raw mode)
+        pca_for_trees: Apply PCA compression (for tree models like RSF, XGBoost)
+        pca_n_components: Target PCA dimensions (default 32)
+        
     Returns: (X_train_emb, X_val_emb, X_test_emb, classifier)
     """
     if not TABICL_AVAILABLE:
         raise ImportError("tabicl is not installed. Install with: pip install tabicl")
     
     if verbose:
-        print("=" * 60)
-        print("Applying TabICL Embedding Extraction")
-        print("=" * 60)
+        print(f"TabICL: {X_train.shape[0]} samples, {X_train.shape[1]} features")
     
     # Convert to DataFrames
     X_train_df = pd.DataFrame(X_train, columns=feature_names)
@@ -143,11 +231,6 @@ def apply_tabicl_embedding(
     
     # Binary event indicator for TabICL
     y_train_cls = E_train.astype(int)
-    
-    if verbose:
-        print(f"\n[1/4] Initializing TabICL...")
-        print(f"  Training samples: {X_train.shape[0]}")
-        print(f"  Features: {X_train.shape[1]}")
     
     # Initialize TabICL
     clf = TabICLClassifier(
@@ -159,17 +242,7 @@ def apply_tabicl_embedding(
         n_jobs=tabicl_kwargs.get('n_jobs', 1)
     )
     
-    if verbose:
-        print(f"\n[2/4] Fitting TabICL on training data...")
-    
     clf.fit(X_train_df, y_train_cls)
-    
-    if verbose:
-        print(f"  ✓ TabICL fitted successfully")
-        if use_deep_embeddings:
-            print(f"  Mode: Deep encoder embeddings")
-        else:
-            print(f"  Mode: Shallow predict_proba features")
     
     device = tabicl_kwargs.get('device', 'cpu')
     
@@ -187,8 +260,6 @@ def apply_tabicl_embedding(
             
             # Check for validity: must not be None, must match rows, must be high-dim (>20)
             if emb is None or emb.shape[1] < 32:
-                if verbose:
-                    print(f"DEBUG: Extraction failed or low dim ({emb.shape[1] if emb is not None else 'None'}) for {split_name}")
                 use_deep_embeddings = False
                 deep_embeddings = {}
                 break
@@ -199,11 +270,10 @@ def apply_tabicl_embedding(
             X_val_emb = deep_embeddings['val']
             X_test_emb = deep_embeddings['test']
             if verbose:
-                print(f"\n✓ Deep embeddings extracted: {X_train_emb.shape[1]}D")
+                print(f"  → Deep embeddings: {X_train_emb.shape[1]}D")
         else:
             if verbose:
-                print(f"\n⚠ Deep embedding extraction failed")
-                print(f"  Using enhanced predict_proba features instead")
+                print(f"  → Fallback to predict_proba features")
     
     # Fallback to predict_proba-based features if deep extraction failed or was not requested
     if not use_deep_embeddings:
@@ -225,24 +295,28 @@ def apply_tabicl_embedding(
         X_val_emb = proba_to_enhanced_features(val_proba)
         X_test_emb = proba_to_enhanced_features(test_proba)
     
+    # Apply PCA compression if requested (for tree models)
+    if pca_for_trees and use_deep_embeddings:
+        X_train_emb, X_val_emb, X_test_emb, _ = _apply_pca_compression(
+            X_train_emb, X_val_emb, X_test_emb, 
+            n_components=pca_n_components, verbose=verbose
+        )
+    
     # Combine with raw features if requested
     if concat_with_raw:
-        if verbose:
-            print(f"\n[4/4] Concatenating with original features...")
-        X_train_final = np.column_stack([X_train_emb, X_train])
-        X_val_final = np.column_stack([X_val_emb, X_val])
-        X_test_final = np.column_stack([X_test_emb, X_test])
+        # One-hot encode categorical features in raw data before concatenation
+        X_train_raw_enc, X_val_raw_enc, X_test_raw_enc, _ = _encode_categorical_features(
+            X_train, X_val, X_test, feature_names, verbose=verbose
+        )
+        X_train_final = np.column_stack([X_train_emb, X_train_raw_enc])
+        X_val_final = np.column_stack([X_val_emb, X_val_raw_enc])
+        X_test_final = np.column_stack([X_test_emb, X_test_raw_enc])
     else:
-        if verbose:
-            print(f"\n[4/4] Using embeddings only (no raw features)...")
         X_train_final = X_train_emb
         X_val_final = X_val_emb
         X_test_final = X_test_emb
         
     if verbose:
-        print("=" * 60)
-        print(f"TabICL Embedding Complete")
-        print(f"Final Train Shape: {X_train_final.shape}")
-        print("=" * 60 + "\n")
+        print(f"  → Final shape: {X_train_final.shape[1]} features")
     
     return X_train_final, X_val_final, X_test_final, clf
