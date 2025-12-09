@@ -1,7 +1,7 @@
 if __name__ == "__main__":
     import sys
     from datasets import datasets
-    from experiments.experiment import RSFExperiment
+    from experiments.experiment import XGBoostExperiment
 
     random_seed = 0
 
@@ -22,20 +22,21 @@ if __name__ == "__main__":
     batch = [100, 250]
 
     param_grid_cox = {
-        "n_estimators": [200],
-        "max_depth": [10],
-        "min_samples_split": [20],
-        "min_samples_leaf": [10],
-        "random_state": [42],
+        "n_estimators" : [100, 200],
+        "learning_rate" :[0.05, 0.1],
+        "max_depth" : [4, 6, 8],
+        "subsample" : [0.8],
+        "colsample_bytree" : [0.8],
+        "random_state" : [42],
+        'min_child_weight': [5, 10],
         "epochs": [max_epochs],
-        "learning_rate": [1e-3, 1e-4],
         "batch": batch,
     }
 
-    experiment = RSFExperiment.create(
+    experiment = XGBoostExperiment.create(
         param_grid_cox,
         n_iter=grid_search,
-        path="Results/{}_raw_rsf".format(dataset),
+        path="Results/{}_raw_xgboost".format(dataset),
         random_seed=random_seed,
         fold=fold,
     )
@@ -45,18 +46,6 @@ if __name__ == "__main__":
     print(
         "*********************this is evaluations parameters : *********************************************\n"
     )
-    # results = experiment.get_eval_metrics()
-
-    # c_index_train = [d["c_index_train"] for d in results]
-    # c_index_val = [d["c_index_val"] for d in results]
-    # ibs_val = [d["ibs_val"] for d in results]
-
-    # print("=== Model Metrics ===")
-    # for i, (c_tr, c_val, ibs) in enumerate(zip(c_index_train, c_index_val, ibs_val), 1):
-    #     print(
-    #         f"Model {i:2d} | C-index Train: {c_tr:.4f} | C-index Val: {c_val:.4f} | IBS Val: {ibs:.4f}"
-    #     )
-
     results = experiment.get_eval_metrics()
     none_report = []
     print("\n=== Model Metrics ===\n")
@@ -95,6 +84,7 @@ if __name__ == "__main__":
     else:
         for model_idx, fields in none_report:
             print(f"Model {model_idx}: {', '.join(fields)} were None")
+
     print(
         "*********************this is evaluations parameters : *********************************************\n"
     )

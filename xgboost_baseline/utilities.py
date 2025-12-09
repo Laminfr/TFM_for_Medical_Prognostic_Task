@@ -1,44 +1,89 @@
 import numpy as np
+import pandas as pd
+
 import xgboost as xgb
+from sksurv.util import Surv
 
 from lifelines import KaplanMeierFitter
+
 # Import the shared data loader
 try:
     from datasets.data_loader import load_and_preprocess_data
 except ImportError:
     from datasets.data_loader import load_and_preprocess_data
 
-# Import metrics from neuralfg repository
-import sys
-sys.path.insert(0, '/vol/miltank/users/sajb/Project/NeuralFineGray')
 
 from metrics.calibration import integrated_brier_score
 from metrics.discrimination import truncated_concordance_td
 
 
-def train_xgboost_model(X_train, y_train):
+def wrap_np_to_pandas(X, index=None, prefix="x"):
+    if isinstance(X, (pd.DataFrame, pd.Series)):
+        return X
+
+    X = np.asarray(X)
+
+    if X.ndim == 1:
+        return pd.Series(X, index=index)
+
+    if X.ndim == 2:
+        n_cols = X.shape[1]
+        cols = [f"{prefix}{i}" for i in range(n_cols)]
+        return pd.DataFrame(X, columns=cols, index=index)
+
+    raise ValueError("Input must be 1D or 2D numpy array or pandas object.")
+
+
+def train_xgboost_model(
+    X_train,
+    t_train,
+    e_train,
+    t_val,
+    e_val,
+    objective="survival:cox",
+    eval_metric="cox-nloglik",
+    n_estimators=200,
+    learning_rate=0.05,
+    max_depth=4,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    random_state=42,
+):
     """Train XGBoost Survival model."""
     # The Cox objective expects numeric time as the label and the event
     # indicator as the sample weight.
+    X_train = wrap_np_to_pandas(X_train)
+    t_train = wrap_np_to_pandas(t_train, prefix="t")
+    e_train = wrap_np_to_pandas(e_train, prefix="e")
+    t_val = wrap_np_to_pandas(t_val, prefix="t")
+    e_val = wrap_np_to_pandas(e_val, prefix="e")
+
+    y_train = Surv.from_arrays(event=e_train.values, time=t_train.values)
+
     y_time = y_train["time"]
     y_event = y_train["event"].astype(int)
 
     # Suggested hyperparameters are a good starting point
-    model = xgb.XGBRegressor(
-        objective="survival:cox",
-        eval_metric="cox-nloglik",
-        n_estimators=200,
-        learning_rate=0.05,
-        max_depth=4,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        random_state=42,
+    model = xgb.train(
+        objective=objective,
+        eval_metric=eval_metric,
+        n_estimators=n_estimators,
+        learning_rate=learning_rate,
+        max_depth=max_depth,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        random_state=random_state,
     )
     model.fit(X_train, y_time, sample_weight=y_event)
     return model
 
 
-def estimate_survival_from_cox(risk_scores_train, risk_scores_test, t_train, e_train, time_grid):
+def estimate_survival_from_cox(
+    risk_scores_test,
+    t_train,
+    e_train,
+    time_grid,
+):
     """
     Estimate survival probabilities using Breslow estimator.
     S(t|x) = S_0(t) ^ exp(risk_score)
@@ -56,10 +101,9 @@ def estimate_survival_from_cox(risk_scores_train, risk_scores_test, t_train, e_t
 
     # Calculate survival probabilities for each sample
     # S(t|x) = S_0(t) ^ exp(risk_score)
-    survival_probs = np.row_stack([
-        baseline_surv ** np.exp(risk)
-        for risk in risk_scores_clipped
-    ])
+    survival_probs = np.vstack(
+        [baseline_surv ** np.exp(risk) for risk in risk_scores_clipped]
+    )
 
     return survival_probs
 
@@ -90,7 +134,9 @@ def concordance_index_from_risk_scores(e, t, risk_scores, tied_tol=1e-8):
         # Higher risk score means higher risk (shorter time to event)
         # So we want risk_scores[at_risk] < risk_scores[i] for concordance
         concordant += (risk_scores[at_risk] < risk_scores[i]).sum()
-        concordant += 0.5 * (np.abs(risk_scores[at_risk] - risk_scores[i]) <= tied_tol).sum()
+        concordant += (
+            0.5 * (np.abs(risk_scores[at_risk] - risk_scores[i]) <= tied_tol).sum()
+        )
         permissible += at_risk.sum()
 
     if permissible == 0:
@@ -99,22 +145,47 @@ def concordance_index_from_risk_scores(e, t, risk_scores, tied_tol=1e-8):
     return concordant / permissible
 
 
-def evaluate_xgboost_model(model, X_train, X_val, y_train, y_val):
+def evaluate_xgboost_model(model, X_train, t_train, e_train, X_val, t_val, e_val):
     """Evaluate XGBoost model using NeuralFineGray metrics."""
 
+    X_train = wrap_np_to_pandas(X_train)
+    t_train = wrap_np_to_pandas(t_train, prefix="t")
+    e_train = wrap_np_to_pandas(e_train, prefix="e")
+    X_val = wrap_np_to_pandas(X_val)
+    t_val = wrap_np_to_pandas(t_val, prefix="t")
+    e_val = wrap_np_to_pandas(e_val, prefix="e")
+
+    y_train = Surv.from_arrays(event=e_train.values, time=t_train.values)
+    y_val = Surv.from_arrays(event=e_val.values, time=t_val.values)
+
+    # Convert to numpy if needed
+    if isinstance(X_train, pd.DataFrame):
+        X_train = X_train.values
+    if isinstance(t_train, pd.Series):
+        t_train = t_train.values
+    if isinstance(e_train, pd.Series):
+        e_train = e_train.values
+
+    y_xgb_train = np.where(e_train > 0, t_train, -t_train)
+    dtrain = xgb.DMatrix(X_train, label=y_xgb_train)
+    y_xgb_val = np.where(e_val > 0, t_val, -t_val)
+    dval = xgb.DMatrix(X_val, label=y_xgb_val)
+
     # Get risk scores from XGBoost (these are log-hazard ratios)
-    risk_scores_train = model.predict(X_train)
-    risk_scores_val = model.predict(X_val)
+    risk_scores_train = model.predict(dtrain)
+    risk_scores_val = model.predict(dval)
 
     # Extract time and event arrays from structured arrays
-    t_train = y_train['time']
-    e_train = y_train['event'].astype(int)
-    t_val = y_val['time']
-    e_val = y_val['event'].astype(int)
+    t_train = y_train["time"]
+    e_train = y_train["event"].astype(int)
+    t_val = y_val["time"]
+    e_val = y_val["event"].astype(int)
 
     # --- C-index using risk scores directly ---
     # For Cox models, risk scores can be used directly for concordance
-    c_index_train = concordance_index_from_risk_scores(e_train, t_train, risk_scores_train)
+    c_index_train = concordance_index_from_risk_scores(
+        e_train, t_train, risk_scores_train
+    )
     c_index_val = concordance_index_from_risk_scores(e_val, t_val, risk_scores_val)
 
     print(f"C-index (train): {c_index_train:.4f}")
@@ -128,15 +199,17 @@ def evaluate_xgboost_model(model, X_train, X_val, y_train, y_val):
     e_val_filtered = e_val[valid_mask]
     X_val_filtered = X_val[valid_mask]
 
-    print(f"Validation samples for IBS: {len(t_val_filtered)}/{len(t_val)} " +
-          f"({100 * len(t_val_filtered) / len(t_val):.1f}%)")
+    print(
+        f"Validation samples for IBS: {len(t_val_filtered)}/{len(t_val)} "
+        + f"({100 * len(t_val_filtered) / len(t_val):.1f}%)"
+    )
 
     if len(t_val_filtered) == 0:
         print("WARNING: No validation samples within training time range!")
         return {
             "c_index_train": c_index_train,
             "c_index_val": c_index_val,
-            "ibs_val": np.nan
+            "ibs_val": np.nan,
         }
 
     # Apply the same mask to the validation risk scores
@@ -159,11 +232,7 @@ def evaluate_xgboost_model(model, X_train, X_val, y_train, y_val):
 
     # Estimate survival probabilities for IBS
     survival_probs_val = estimate_survival_from_cox(
-        risk_scores_train,
-        risk_scores_val_filtered,
-        t_train,
-        e_train,
-        time_grid
+        risk_scores_val_filtered, t_train, e_train, time_grid
     )
 
     # Convert survival to cumulative incidence (risk) for the IBS metric
@@ -183,53 +252,54 @@ def evaluate_xgboost_model(model, X_train, X_val, y_train, y_val):
         time_grid,
         t_eval=time_grid,
         km=km,
-        competing_risk=competing_risk
+        competing_risk=competing_risk,
     )
 
     return {
+        "c_index_predict": None,
+        "surv_probs_predict": None,
+        "surv_probs_val": survival_probs_val,
         "c_index_train": c_index_train,
         "c_index_val": c_index_val,
-        "ibs_val": ibs_val
+        "ibs_val": ibs_val,
     }
 
 
-def main(dataset='METABRIC', normalize=True, test_size=0.2, random_state=42):
-    print(f"Loading and preprocessing {dataset} dataset for sksurv...")
-    X_train, X_val, y_train, y_val = load_and_preprocess_data(
-        dataset=dataset,
-        normalize=normalize,
-        test_size=test_size,
-        random_state=random_state,
-        as_sksurv_y=True
-    )
+def summary_output(X_train, t_train, e_train, X_val, t_val, e_val, metrics):
+    X_train = wrap_np_to_pandas(X_train)
+    t_train = wrap_np_to_pandas(t_train, prefix="t")
+    e_train = wrap_np_to_pandas(e_train, prefix="e")
+    X_val = wrap_np_to_pandas(X_val)
+    t_val = wrap_np_to_pandas(t_val, prefix="t")
+    e_val = wrap_np_to_pandas(e_val, prefix="e")
+
+    y_train = Surv.from_arrays(event=e_train.values, time=t_train.values)
+    y_val = Surv.from_arrays(event=e_val.values, time=t_val.values)
+
     print(f"Training samples: {len(X_train)}")
     print(f"Validation samples: {len(X_val)}")
     print(f"Features: {X_train.shape[1]}")
-    print(f"Time range (train): [{y_train['time'].min():.2f}, {y_train['time'].max():.2f}]")
+    print(
+        f"Time range (train): [{y_train['time'].min():.2f}, {y_train['time'].max():.2f}]"
+    )
     print(f"Time range (val):   [{y_val['time'].min():.2f}, {y_val['time'].max():.2f}]")
     print(f"Event rate (train): {y_train['event'].mean():.2%}")
     print(f"Event rate (val):   {y_val['event'].mean():.2%}")
 
-    print("\nTraining XGBoost Survival model...")
-    model = train_xgboost_model(X_train, y_train)
-
-    print("\nEvaluating model...")
-    metrics = evaluate_xgboost_model(model, X_train, X_val, y_train, y_val)
-
     print("\n" + "=" * 50)
     print("XGBOOST MODEL RESULTS")
     print("=" * 50)
-    if not np.isnan(metrics['c_index_train']):
+    if not np.isnan(metrics["c_index_train"]):
         print(f"C-index (train): {metrics['c_index_train']:.4f}")
     else:
         print(f"C-index (train): N/A")
 
-    if not np.isnan(metrics['c_index_val']):
+    if not np.isnan(metrics["c_index_val"]):
         print(f"C-index (val):   {metrics['c_index_val']:.4f}")
     else:
         print(f"C-index (val):   N/A")
 
-    if not np.isnan(metrics['ibs_val']):
+    if not np.isnan(metrics["ibs_val"]):
         print(f"IBS (val):       {metrics['ibs_val']:.4f}")
     else:
         print(f"IBS (val):       N/A")
@@ -237,7 +307,3 @@ def main(dataset='METABRIC', normalize=True, test_size=0.2, random_state=42):
     print("\nNote: C-index computed directly from risk scores")
     print("      IBS computed using NeuralFineGray metrics with survival curves")
     print("      Validation IBS computed on samples with time < max(train time)")
-
-
-if __name__ == "__main__":
-    main()

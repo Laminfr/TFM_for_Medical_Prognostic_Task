@@ -71,10 +71,23 @@ class RSFFG(NeuralFineGray):
         return self
 
     # ------------- predictions -------------
-    def predict_survival(self):
+    def predict_survival(self, x , times):
         if not self.fitted or self.model is None:
             raise RuntimeError("Call fit() first.")
-        return self.eval_params["surv_probs_val"]
+        # return self.eval_params["surv_probs_val"]
+        surv_funcs = self.model.predict_survival_function(x, return_array=True)
+        model_times = self.model.unique_times_
+        
+        # Interpolate to requested times
+        surv_probs = np.zeros((x.shape[0], len(times)))
+        
+        for i, t in enumerate(times):
+            idx = np.searchsorted(model_times, t, side='left')
+            if idx >= len(model_times):
+                idx = len(model_times) - 1
+            surv_probs[:, i] = surv_funcs[:, idx]
+        
+        return surv_probs
 
     def predict_risk_matrix(self):
         if not self.fitted or self.model is None:
