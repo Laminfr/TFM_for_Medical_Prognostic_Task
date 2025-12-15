@@ -10,18 +10,12 @@ sys.path.append("/")
 
 from datasets.data_loader import load_and_preprocess_data
 from experiment import CoxExperiment
-from coxph.utilities import train_cox_model, evaluate_model as evaluate_cox
-from XGB.utilities import train_xgboost_model, evaluate_xgboost_model
-from deepsurv.utilities import train_deepsurv_model, evaluate_deepsurv_model
-from rsf.utilities import train_rsf_model, evaluate_rsf_model
-from tfm.TARTE.extract_embeddings import get_embeddings_tarte_cross, get_embeddings_dummy_tarte_cross, get_embeddings_combination_tarte_cross
+from tfm.TARTE.legacy_embedding_strategies import get_embeddings_tarte_cross, get_embeddings_dummy_tarte_cross, get_embeddings_combination_tarte_cross
 from images.utilities import plot_results_relative, plot_results_absolute
 import numpy as np
 import pandas as pd
 import time
-from sklearn.preprocessing import StandardScaler
 from metrics.calibration import integrated_brier_score
-from metrics.discrimination import truncated_concordance_td
 
 
 def concordance_index_from_risk_scores(e, t, risk_scores, tied_tol=1e-8):
