@@ -16,7 +16,7 @@ from coxph.utilities import train_cox_model, evaluate_model as evaluate_cox
 from xgb_survival.utilities import train_xgboost_model, evaluate_xgboost_model
 from deepsurv.utilities import train_deepsurv_model, evaluate_deepsurv_model
 from rsf.utilities import train_rsf_model, evaluate_rsf_model
-from tfm.TARTE.legacy_embedding_strategies import get_embeddings_tarte, get_embeddings_dummy_tarte, get_embeddings_combination_tarte
+from tfm.TARTE.legacy.legacy_embedding_strategies import get_embeddings_tarte, get_embeddings_dummy_tarte, get_embeddings_combination_tarte
 from images.utilities import plot_results_relative, plot_results_absolute
 
 

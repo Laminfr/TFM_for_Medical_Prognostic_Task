@@ -1,6 +1,6 @@
+from pandas_patch import pd
 from nfg.nfg_api import NeuralFineGray
 import numpy as np
-import pandas as pd
 from .utilities import *
 
 from metrics.calibration import integrated_brier_score as nfg_integrated_brier
@@ -53,7 +53,7 @@ class CoxPHFG(NeuralFineGray):
 
         self.model = train_cox_model(x_train, t_train, e_train, self.penalizer)
         self.eval_params = evaluate_model(self.model, x_train, x_val, t_train, t_val, e_train, e_val)
-        summary_output(self.model, x_train, t_train, e_train, x_val, t_val, e_val, self.eval_params)
+        # summary_output(self.model, x_train, t_train, e_train, x_val, t_val, e_val, self.eval_params)
         self.fitted = True
         return self
 

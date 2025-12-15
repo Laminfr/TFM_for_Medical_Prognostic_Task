@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 import numpy as np
-import pandas as pd
+from pandas_patch import pd
 from lifelines import KaplanMeierFitter
 
 class DeepSurvTorch(nn.Module):

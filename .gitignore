@@ -129,6 +129,12 @@ dmypy.json
 .pyre/
 
 # TabICL outputs
-tabICL/results/
-tabICL/embeddings/
-tabICL/__pycache__/
+tfm/TabICL/results
+tfm/TabICL/embeddings/
+tfm/TabICL/__pycache__/
+
+
+# TARTE outputs
+tfm/TARTE/results
+tfm/TARTE/embeddings/
+tfm/TARTE/__pycache__/

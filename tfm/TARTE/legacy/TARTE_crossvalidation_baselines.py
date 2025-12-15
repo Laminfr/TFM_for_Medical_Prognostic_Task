@@ -9,8 +9,8 @@ import sys
 sys.path.append("/")
 
 from datasets.data_loader import load_and_preprocess_data
-from experiment import CoxExperiment
-from tfm.TARTE.legacy_embedding_strategies import get_embeddings_tarte_cross, get_embeddings_dummy_tarte_cross, get_embeddings_combination_tarte_cross
+from experiments.experiment import CoxExperiment
+from tfm.TARTE.legacy.legacy_embedding_strategies import get_embeddings_tarte_cross, get_embeddings_dummy_tarte_cross, get_embeddings_combination_tarte_cross
 from images.utilities import plot_results_relative, plot_results_absolute
 import numpy as np
 import pandas as pd
@@ -122,24 +122,18 @@ def baselines_crossevaluate_embeddings(dataset='METABRIC', normalize=True, test_
         print("Extract TARTE embeddings ...")
         X = get_embeddings_tarte_cross(X)
         X_sk = X
-        dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        X.to_pickle(os.path.join(dir, "tfm", "TARTE", "X_tarte.pkl"))
         print("Run Baselines on embeddings")
     elif embeddings_flag=="dummy":
         print(f"\n>>> TARTE Embeddings with dummy target\n")
         print("Extract TARTE embeddings with dummy y ...")
         X = get_embeddings_dummy_tarte_cross(X)
         X_sk = X
-        dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        X.to_pickle(os.path.join(dir, "tfm", "TARTE", "X_tarte.pkl"))
         print("Run Baselines on embeddings")
     elif embeddings_flag == "combi":
         print(f"\n>>> TARTE Embeddings for time and event combined\n")
         print("Extract TARTE embeddings with time and event combined...")
         X = get_embeddings_combination_tarte_cross(X, t, e)
         X_sk = X
-        dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        X.to_pickle(os.path.join(dir, "tfm", "TARTE", "X_tarte.pkl"))
         print("Run Baselines on embeddings")
     else:
         print(f"\n>>> Use raw data for baseline predictions\n")

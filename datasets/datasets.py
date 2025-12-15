@@ -1,8 +1,8 @@
-from DeepSurvivalMachines.dsm.datasets import load_dataset as load_dsm
+import pandas as pd
+from auton_survival.datasets import load_dataset as load_dsm
 from sklearn.preprocessing import StandardScaler, OrdinalEncoder
 from sklearn.impute import SimpleImputer
 from pycox import datasets
-import pandas as pd
 import numpy as np
 import os
 from pathlib import Path
@@ -55,17 +55,17 @@ def load_dataset(dataset='SUPPORT', path='./', normalize=True, return_raw=False,
         path = Path(os.path.join(dir, "seer", "seernfg_cleaned.csv"))
         if path.is_file():
             df = pd.read_csv(path)
+            print("Using cleaned and reduced SEER dataset!")
         else:
             path = os.path.join(dir, "seer", "seernfg.csv")
             df = pd.read_csv(path, dtype={3: "string"})
-            print(f"originally had {len(df)} rows")
             df = process_seer(df)
             df['duration'] += EPS # Avoid problem of the minimum value 0
             df.columns = [re.sub(r"[<>\[\]]", "_", str(col)).strip() for col in df.columns]
             for col in df.columns:
                 if pd.api.types.is_numeric_dtype(df[col]):
                     df[col] = pd.to_numeric(df[col], errors='coerce', downcast='float')
-            print(f"now has {len(df)} rows")
+            df = stratified_reduce(df, frac=0.01)  # keep 10% of rows
             df.to_csv(os.path.join(dir, "seer", "seernfg_cleaned.csv"), index=False)
     elif dataset == 'SYNTHETIC_COMPETING':
         df = pd.read_csv('https://raw.githubusercontent.com/chl8856/DeepHit/master/sample%20data/SYNTHETIC/synthetic_comprisk.csv')
@@ -275,7 +275,6 @@ def load_dataset_with_splits(
 
 
 def process_seer(df):
-    print("process_seer_dataset")
     # Remove multiple visits
     df = df.groupby('Patient ID').first().drop(columns= ['Site recode ICD-O-3/WHO 2008']).copy()
 
@@ -347,5 +346,49 @@ def process_seer(df):
     df_num = pd.DataFrame(imputer.fit_transform(df[numerical_col].astype(float)), columns = numerical_col, index = df.index)
 
     return pd.concat([df_cat, df_num, df_ord, df[['duration', 'event']]], axis = 1)
-    
+
+# -------------------------------------------------------
+# OPTIONAL: Reduce dataset size (row subsampling)
+# -------------------------------------------------------
+def stratified_reduce(df, frac=0.25, n_time_bins=5, random_state=42):
+    """
+    Reduce dataset size by sampling a fraction of rows while preserving:
+        - event distribution
+        - coarse survival time distribution
+    """
+    df = df.copy()
+
+    # survival variables
+    T = df["duration"]
+    E = df["event"]
+
+    # time bins for stratification
+    time_bins = pd.qcut(T, q=n_time_bins, labels=False, duplicates="drop")
+
+    # stratification label = event + time_bin
+    strata = E.astype(str) + "_" + time_bins.astype(str)
+
+    # group indices by strata
+    groups = strata.groupby(strata).groups
+
+    rng = np.random.default_rng(random_state)
+    n = len(df)
+    target_n = int(n * frac)
+
+    chosen = []
+    for label, idxs in groups.items():
+        # convert group labels → positional indices
+        label_idxs = np.array(list(idxs))
+        idxs_pos = df.index.get_indexer(label_idxs)
+
+        # proportional allocation
+        k = max(1, int(len(idxs_pos) / n * target_n))
+        k = min(k, len(idxs_pos))
+        chosen.extend(rng.choice(idxs_pos, size=k, replace=False).tolist())
+
+    chosen = np.array(chosen)
+    df_small = df.iloc[chosen].reset_index(drop=True)
+
+    print(f"Reduced dataset size: {len(df)} → {len(df_small)} rows")
+    return df_small
     

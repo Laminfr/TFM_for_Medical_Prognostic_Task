@@ -1,5 +1,5 @@
 import numpy as np
-import pandas as pd
+from pandas_patch import pd
 import xgboost as xgb
 from lifelines import KaplanMeierFitter
 

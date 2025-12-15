@@ -1,5 +1,5 @@
 import numpy as np
-import pandas as pd
+from pandas_patch import pd
 from sksurv.ensemble import RandomSurvivalForest
 from sksurv.metrics import concordance_index_censored, integrated_brier_score
 

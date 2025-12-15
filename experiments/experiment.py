@@ -1,16 +1,12 @@
+from pandas_patch import pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import GroupKFold, StratifiedKFold, ShuffleSplit, ParameterSampler, train_test_split
-import pandas as pd
 import numpy as np
 import pickle
 import torch
 import time
 import os
 import io
-
-from coxph.coxph_api import CoxPHFG
-from metrics.calibration import integrated_brier_score as nfg_integrated_brier
-from metrics.discrimination import truncated_concordance_td as nfg_cindex_td
 
 class CPU_Unpickler(pickle.Unpickler):
     def find_class(self, module, name):
@@ -382,6 +378,7 @@ class DeSurvExperiment(NFGExperiment):
     
 class CoxExperiment(Experiment):
     def _fit_(self, x, t, e, x_val, t_val, e_val, hyperparameter, cause_specific=False):
+        from coxph.coxph_api import CoxPHFG
         pen = hyperparameter.pop("penalizer", 0.01)
         model = CoxPHFG(penalizer=pen)
         model.fit(x = x,
@@ -760,6 +757,223 @@ class TabICLExperiment(Experiment):
     def _nll_(self, *params):
         return self._base_exp._nll_(*params)
     
+    def _predict_(self, model, x, r, index):
+        return self._base_exp._predict_(model, x, r, index)
+
+
+class TARTEExperiment(Experiment):
+    """
+    TARTE-enhanced experiment that generates embeddings dynamically inside CV folds
+    to prevent data leakage (transductive setup).
+
+    Model-specific strategies:
+    - Neural Networks (DeepSurv, NFG, DeSurv): Full 512D embeddings
+    - Tree Models (RSF, XGBoost): PCA-compressed to 32D
+    - Linear Models (CoxPH): Full 512D embeddings
+    """
+
+    def __init__(self, base_experiment_class, tarte_mode='deep+raw',
+                 hyper_grid=None, n_iter=100, fold=None, k=5, random_seed=0,
+                 path='results', save=True, delete_log=False, times=100,
+                 pca_for_trees=False, pca_n_components=32, **tarte_kwargs):
+        """
+        Args:
+            base_experiment_class: The underlying experiment class (NFGExperiment, DeSurvExperiment, etc.)
+            tarte_mode: 'deep' for embeddings only, 'deep+raw' for embeddings + original features
+            pca_for_trees: Whether to apply PCA compression (for tree models)
+            pca_n_components: Target dimensions for PCA (default 32)
+            tarte_kwargs: Arguments passed to TARTE (device, n_estimators, etc.)
+        """
+        super().__init__(hyper_grid, n_iter, fold, k, random_seed, path, save, delete_log, times)
+        self.base_experiment_class = base_experiment_class
+        self.tarte_mode = tarte_mode
+        self.pca_for_trees = pca_for_trees
+        self.pca_n_components = pca_n_components
+        self.tarte_kwargs = tarte_kwargs
+        self._base_exp = None  # Instantiated per-fold
+
+    def train(self, x, t, e, x_raw=None, feature_names=None, cause_specific=False):
+        """
+        Cross-validation with TARTE embedding generation inside each fold.
+
+        Args:
+            x: Processed features (numpy array, n x d)
+            t: Time to event
+            e: Event indicator
+            x_raw: Raw DataFrame with original feature values (for TARTE)
+            feature_names: Feature names for TARTE
+            cause_specific: Cause-specific setting flag
+        """
+        from datasets.tarte_embeddings import apply_tarte_embedding
+
+        self.times = np.linspace(t.min(), t.max(), self.times) if isinstance(self.times, int) else self.times
+        e = e.astype(int)
+
+        self.risks = np.unique(e[e > 0])
+        self.fold_assignment = pd.Series(np.nan, index=range(len(x)))
+
+        # Setup cross-validation
+        groups = None
+        if isinstance(self.k, list):
+            kf = GroupKFold()
+            groups = self.k
+        elif self.k == 1:
+            kf = ShuffleSplit(n_splits=self.k, random_state=self.random_seed, test_size=0.2)
+        else:
+            kf = StratifiedKFold(n_splits=self.k, random_state=self.random_seed, shuffle=True)
+
+        if self.best_nll is None:
+            self.best_nll = np.inf
+
+        for i, (train_index, test_index) in enumerate(kf.split(x, e, groups=groups)):
+            self.fold_assignment[test_index] = i
+            if i < self.fold:
+                continue
+            if self.all_fold is not None and self.all_fold != i:
+                continue
+
+            print(f'Fold {i}: TARTE ({self.tarte_mode})')
+
+            # Split indices for train/dev/val within fold
+            train_idx, dev_idx = train_test_split(
+                train_index, test_size=0.2, random_state=self.random_seed, stratify=e[train_index]
+            )
+            dev_idx, val_idx = train_test_split(
+                dev_idx, test_size=0.5, random_state=self.random_seed, stratify=e[dev_idx]
+            )
+
+            # Get data splits
+            x_train_raw = x_raw.iloc[train_idx] if x_raw is not None else x[train_idx]
+            x_dev_raw = x_raw.iloc[dev_idx] if x_raw is not None else x[dev_idx]
+            x_val_raw = x_raw.iloc[val_idx] if x_raw is not None else x[val_idx]
+            x_test_raw = x_raw.iloc[test_index] if x_raw is not None else x[test_index]
+
+            t_train, t_dev, t_val = t[train_idx], t[dev_idx], t[val_idx]
+            e_train, e_dev, e_val = e[train_idx], e[dev_idx], e[val_idx]
+
+            # Generate TARTE embeddings (fit on train only)
+            use_deep = 'deep' in self.tarte_mode
+            concat_raw = '+raw' in self.tarte_mode
+
+            try:
+                # Convert to numpy for TARTE
+                x_train_np = x_train_raw.values if hasattr(x_train_raw, 'values') else x_train_raw
+                x_dev_np = x_dev_raw.values if hasattr(x_dev_raw, 'values') else x_dev_raw
+                x_val_np = x_val_raw.values if hasattr(x_val_raw, 'values') else x_val_raw
+                x_test_np = x_test_raw.values if hasattr(x_test_raw, 'values') else x_test_raw
+
+                # Apply TARTE embedding (fits on train, transforms all splits)
+                # Pass PCA settings for tree models
+                # TARTE does not need to transform val and test separately
+                x_train_emb, x_dev_emb, x_val_emb, x_test_emb = apply_tarte_embedding(
+                    X_train = x_train_np,
+                    X_dev = x_dev_np,
+                    X_val = x_val_np,
+                    X_test = x_test_np,
+                    E_train = e_train,
+                    T_train= t_train,
+                    feature_names = feature_names,
+                    use_deep_embeddings = use_deep,
+                    concat_with_raw = concat_raw,
+                    pca_for_trees = self.pca_for_trees,
+                    pca_n_components = self.pca_n_components,
+                    verbose = True,
+                    ** self.tarte_kwargs
+                )
+
+                print(f"  → Embeddings: {x_train_emb.shape[1]} features")
+
+            except Exception as ex:
+                print(f"  WARNING: TARTE failed ({ex}), using processed features")
+                x_train_emb = x[train_idx]
+                x_dev_emb = x[dev_idx]
+                x_val_emb = x[val_idx]
+                x_test_emb = x[test_index]
+
+            # Standardize embeddings
+            emb_scaler = StandardScaler()
+            x_train_emb = emb_scaler.fit_transform(x_train_emb)
+            x_dev_emb = emb_scaler.transform(x_dev_emb)
+            x_val_emb = emb_scaler.transform(x_val_emb)
+            x_test_emb = emb_scaler.transform(x_test_emb)
+
+            # Hyperparameter search using base experiment's methods
+            for j, hyper in enumerate(self.hyper_grid):
+                if j < self.iter:
+                    continue
+
+                np.random.seed(self.random_seed)
+                torch.manual_seed(self.random_seed)
+
+                start_time = time.process_time()
+
+                # Create temporary base experiment for fitting
+                self._base_exp = self.base_experiment_class(
+                    hyper_grid=None, n_iter=1, k=1,
+                    random_seed=self.random_seed, save=False, times=self.times
+                )
+                self._base_exp.times = self.times
+                self._base_exp.risks = self.risks
+
+                model = self._base_exp._fit_(
+                    x_train_emb, t_train, e_train,
+                    x_val_emb, t_val, e_val,
+                    hyper.copy(), cause_specific=cause_specific
+                )
+                self.running_time += time.process_time() - start_time
+
+                nll = self._base_exp._nll_(model, x_dev_emb, t_dev, e_dev, e_train, t_train)
+
+                if nll < self.best_nll:
+                    self.best_hyper[i] = hyper
+                    self.best_model[i] = model
+                    self.best_nll = nll
+                    # Store test embeddings for prediction
+                    if not hasattr(self, '_test_embeddings'):
+                        self._test_embeddings = {}
+                    self._test_embeddings[i] = (x_test_emb, test_index)
+
+                self.iter = j + 1
+                self.save(self)
+
+            self.fold, self.iter = i + 1, 0
+            self.best_nll = np.inf
+            self.save(self)
+
+        if self.all_fold is None:
+            return self.save_results(x)
+
+    def save_results(self, x):
+        """Override to use stored test embeddings for predictions."""
+        predictions = []
+        for i in self.best_model:
+            if hasattr(self, '_test_embeddings') and i in self._test_embeddings:
+                x_test_emb, test_index = self._test_embeddings[i]
+                index = test_index
+            else:
+                index = self.fold_assignment[self.fold_assignment == i].index
+                x_test_emb = x[index]
+
+            model = self.best_model[i]
+            predictions.append(pd.concat([self._predict_(model, x_test_emb, r, index) for r in self.risks], axis=1))
+
+        predictions = pd.concat(predictions, axis=0).loc[self.fold_assignment.dropna().index]
+
+        if self.tosave:
+            fold_assignment = self.fold_assignment.copy().to_frame()
+            fold_assignment.columns = pd.MultiIndex.from_product([['Use'], ['']])
+            pd.concat([predictions, fold_assignment], axis=1).to_csv(self.path + '.csv')
+
+        if self.delete_log:
+            os.remove(self.path + '.pickle')
+        return predictions
+
+    def _fit_(self, *params):
+        return self._base_exp._fit_(*params)
+
+    def _nll_(self, *params):
+        return self._base_exp._nll_(*params)
+
     def _predict_(self, model, x, r, index):
         return self._base_exp._predict_(model, x, r, index)
 
