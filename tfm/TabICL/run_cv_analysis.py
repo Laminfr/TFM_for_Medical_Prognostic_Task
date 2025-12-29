@@ -288,7 +288,8 @@ def main(dataset='METABRIC'):
     """Main entry point."""
     
     # Set results directory based on dataset
-    results_dir = Path(f'/vol/miltank/users/sajb/Project/NeuralFineGray/tabICL/results/cv_{dataset.lower()}')
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+    results_dir = Path(PROJECT_ROOT, f'tfm/tabICL/results/cv_{dataset.lower()}')
     results_dir.mkdir(parents=True, exist_ok=True)
     
     print("="*60)

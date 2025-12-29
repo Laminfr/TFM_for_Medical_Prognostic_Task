@@ -93,10 +93,10 @@ EXPERIMENT_CLASSES = {
 }
 
 # Modes to evaluate
-MODES = ['raw', 'deep', 'deep+raw']
+MODES = ['deep+raw']#['raw', 'deep', 'deep+raw']
 
 # Models to evaluate (excluding NFG and DeSurv which have dtype issues)
-MODELS = ['CoxPH', 'RSF', 'XGBoost', 'DeepSurv']
+MODELS = ['XGBoost']#['CoxPH', 'RSF', 'XGBoost', 'DeepSurv']
 
 
 def compute_metrics_at_quantiles(predictions, t, e, times):
@@ -349,4 +349,4 @@ def main(dataset='METABRIC'):
 
 
 if __name__ == "__main__":
-    main(dataset='METABRIC')
+    main(dataset='PBC')

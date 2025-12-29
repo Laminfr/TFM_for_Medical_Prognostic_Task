@@ -2,7 +2,7 @@
 """
 Survival Stacking Experiment Runner
 
-Benchmarks Survival Stacking with TabICL embeddings against DeepSurv and CoxPH
+Benchmarks Survival Stacking with TFM embeddings against DeepSurv and CoxPH
 baselines on METABRIC and PBC datasets.
 
 Target: C-Index > 0.8676 (PBC SOTA), IBS < 0.12
@@ -93,10 +93,7 @@ def load_dataset_for_survival(
         return X, T, E, feature_names
         
     elif dataset == 'PBC':
-        try:
-            from auton_survival.datasets import load_dataset as load_dsm
-        except ImportError:
-            from DeepSurvivalMachines.dsm.datasets import load_dataset as load_dsm
+        from auton_survival.datasets import load_dataset as load_dsm
             
         from sklearn.preprocessing import StandardScaler
         
@@ -111,10 +108,7 @@ def load_dataset_for_survival(
         return X, T.astype(float), E.astype(int), feature_names
     
     elif dataset == 'SUPPORT':
-        try:
-            from auton_survival.datasets import load_dataset as load_dsm
-        except ImportError:
-            from DeepSurvivalMachines.dsm.datasets import load_dataset as load_dsm
+        from auton_survival.datasets import load_dataset as load_dsm
             
         from sklearn.preprocessing import StandardScaler, OrdinalEncoder
         from sklearn.impute import SimpleImputer
@@ -192,6 +186,52 @@ def apply_tabicl_embeddings(
             print(f"WARNING: TabICL not available ({e}). Using raw features.")
         return X_train, X_val, X_test
 
+def apply_tabpfn_embeddings():
+    pass
+
+def apply_tarte_embeddings(
+    X_train: np.ndarray,
+    X_val: np.ndarray,
+    X_test: np.ndarray,
+    feature_names: List[str],
+    mode: str = 'deep+raw',
+    verbose: bool = True
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+        Apply TARTE embedding extraction.
+
+        Parameters
+        ----------
+        mode : str
+            'raw' - original features only
+            'deep' - TARTE embeddings only
+            'deep+raw' - embeddings concatenated with original features
+        """
+    if mode == 'raw':
+        return X_train, X_val, X_test
+
+    try:
+        from datasets.tarte_embeddings import apply_tarte_embedding
+
+        use_deep = 'deep' in mode
+        concat_raw = '+raw' in mode
+
+        X_train_emb, X_val_emb, X_test_emb, _ = apply_tarte_embedding(
+            X_train=X_train,
+            X_val=X_val,
+            X_test=X_test,
+            feature_names=feature_names,
+            use_deep_embeddings=use_deep,
+            concat_with_raw=concat_raw,
+            verbose=verbose
+        )
+
+        return X_train_emb, X_val_emb, X_test_emb
+
+    except ImportError as e:
+        if verbose:
+            print(f"WARNING: TARTE not available ({e}). Using raw features.")
+        return X_train, X_val, X_test
 
 def run_single_fold(
     X_train: np.ndarray,
@@ -218,6 +258,7 @@ def run_single_fold(
     if verbose:
         print(f"\n{'='*50}")
         print(f"Fold {fold_idx + 1}")
+        print(f"  Model: {config.get('classifier', 'xgboost')}")
         print(f"  Train: {len(T_train)}, Val: {len(T_val)}, Test: {len(T_test)}")
         print(f"  Event rate: {100*E_train.mean():.1f}%")
     
@@ -228,16 +269,28 @@ def run_single_fold(
         'classifier': config.get('classifier', 'xgboost'),
         'random_state': config.get('random_state', 42)
     }
-    
-    # XGBoost hyperparameters
-    classifier_params = {
-        'n_estimators': config.get('n_estimators', 200),
-        'max_depth': config.get('max_depth', 6),
-        'learning_rate': config.get('learning_rate', 0.1),
-        'min_child_weight': config.get('min_child_weight', 5),
-        'subsample': config.get('subsample', 0.8),
-        'colsample_bytree': config.get('colsample_bytree', 0.8),
-    }
+
+    if config.get('classifier', 'xgboost') == 'xgboost':
+        # XGBoost hyperparameters
+        classifier_params = {
+            'n_estimators': config.get('n_estimators', 200),
+            'max_depth': config.get('max_depth', 6),
+            'learning_rate': config.get('learning_rate', 0.1),
+            'min_child_weight': config.get('min_child_weight', 5),
+            'subsample': config.get('subsample', 0.8),
+            'colsample_bytree': config.get('colsample_bytree', 0.8),
+        }
+    elif config.get('classifier', 'xgboost') == 'tabicl':
+        # tabicl classifier parameters
+        classifier_params = {
+            'n_estimators': config.get('tabicl_n_estimators', 4),
+            'device': config.get('device', 'cuda'),
+            'max_context_samples': config.get('max_context_samples', 2000),
+            'verbose': False
+        }
+    else:
+        raise ValueError(f"Unknown model: {config.get('classifier', 'xgboost')}")
+
     model_params['classifier_params'] = classifier_params
     
     # Train model
@@ -276,7 +329,8 @@ def run_cv_experiment(
     feature_names: List[str],
     config: Dict,
     n_folds: int = 5,
-    tabicl_mode: str = 'deep+raw',
+    model: str = 'TabICL',
+    tfm_mode: str = 'deep+raw',
     verbose: bool = True
 ) -> Tuple[Dict[str, float], Dict[str, float], List[Dict]]:
     """
@@ -294,8 +348,9 @@ def run_cv_experiment(
     if verbose:
         print("\n" + "="*60)
         print(f"Cross-Validation Experiment")
+        print(f"  Model: {model}")
         print(f"  Folds: {n_folds}")
-        print(f"  TabICL mode: {tabicl_mode}")
+        print(f"  TFM mode: {tfm_mode}")
         print(f"  Samples: {len(T)}, Events: {E.sum()}")
         print("="*60)
     
@@ -330,17 +385,33 @@ def run_cv_experiment(
         X_val = X_train_val[val_indices]
         T_val = T_train_val[val_indices]
         E_val = E_train_val[val_indices]
-        
-        # Apply TabICL embeddings
-        X_train_emb, X_val_emb, X_test_emb = apply_tabicl_embeddings(
-            X_train, X_val, X_test_fold,
-            E_train, feature_names,
-            mode=tabicl_mode,
-            verbose=(verbose and fold_idx == 0)  # Only verbose on first fold
-        )
+
+        # get tfm embeddings
+        if model == "TabICL":
+            # Apply TabICL embeddings
+            X_train_emb, X_val_emb, X_test_emb = apply_tabicl_embeddings(
+                X_train, X_val, X_test_fold,
+                E_train, feature_names,
+                mode=tfm_mode,
+                verbose=(verbose and fold_idx == 0)  # Only verbose on first fold
+            )
+        elif model == "TabPFN":
+            # Apply TabPFN embeddings
+            X_train_emb, X_val_emb, X_test_emb = apply_tabpfn_embeddings()
+        elif model == "TARTE":
+            # Apply TARTE embeddings
+            X_train_emb, X_val_emb, X_test_emb = apply_tarte_embeddings(
+                X_train, X_val, X_test_fold,
+                feature_names,
+                mode=tfm_mode,
+                verbose=(verbose and fold_idx == 0)
+            )
+        else:
+            raise ValueError(f"Unknown model: {model}")
+
         
         if verbose and fold_idx == 0:
-            print(f"\nFeature dimensions after TabICL: {X_train_emb.shape[1]}")
+            print(f"\nFeature dimensions after TFM: {X_train_emb.shape[1]}")
         
         # Run single fold
         fold_metrics = run_single_fold(
@@ -444,9 +515,14 @@ def main():
     parser.add_argument('--dataset', type=str, default='METABRIC',
                         choices=['METABRIC', 'PBC', 'SUPPORT', 'GBSG'],
                         help='Dataset to use')
+    parser.add_argument('--model', default='TARTE',
+                        choices=['TARTE', 'TabPFN', 'TabICL'], help='Model to use')
     parser.add_argument('--mode', type=str, default='deep+raw',
                         choices=['raw', 'deep', 'deep+raw'],
-                        help='TabICL embedding mode')
+                        help='TFM embedding mode')
+    parser.add_argument('--classifier', type=str, default='xgboost',
+                        choices=['xgboost', 'tabicl'],
+                        help='Classifier model to use')
     parser.add_argument('--cv', type=int, default=5,
                         help='Number of CV folds')
     parser.add_argument('--n_intervals', type=int, default=20,
@@ -490,7 +566,7 @@ def main():
     config = {
         'n_intervals': args.n_intervals,
         'interval_strategy': 'quantile',
-        'classifier': 'xgboost',
+        'classifier': args.classifier,
         'random_state': args.seed,
         # Default XGBoost params
         'n_estimators': 200,
@@ -506,7 +582,8 @@ def main():
         X, T, E, feature_names,
         config,
         n_folds=args.cv,
-        tabicl_mode=args.mode,
+        model=args.model,
+        tfm_mode=args.mode,
         verbose=args.verbose
     )
     
@@ -517,6 +594,7 @@ def main():
     print("FINAL RESULTS")
     print("="*70)
     print(f"Dataset: {args.dataset}")
+    print(f"Model: {args.model}")
     print(f"Mode: {args.mode}")
     print(f"CV Folds: {args.cv}")
     print("-"*70)

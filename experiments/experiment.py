@@ -865,7 +865,7 @@ class TARTEExperiment(Experiment):
                 # Apply TARTE embedding (fits on train, transforms all splits)
                 # Pass PCA settings for tree models
                 # TARTE does not need to transform val and test separately
-                x_train_emb, x_dev_emb, x_val_emb, x_test_emb = apply_tarte_embedding(
+                x_train_emb, x_val_emb, x_test_emb, x_dev_emb = apply_tarte_embedding(
                     X_train = x_train_np,
                     X_dev = x_dev_np,
                     X_val = x_val_np,
