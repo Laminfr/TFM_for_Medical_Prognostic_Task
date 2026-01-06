@@ -33,16 +33,10 @@ if __name__ == "__main__":
     experiment = DeepSurvExperiment.create(
         param_grid_deepsurv,
         n_iter=grid_search,
-        path="Results/{}_raw_deepsurv".format(dataset),
+        path="/vol/miltank/users/frou/Documents/TFM_for_medical_prognosis/Results/{}_raw_deepsurv".format(dataset),
         random_seed=random_seed,
         fold=fold,
     )
 
     experiment.train(x, t, e, covariates)
 
-    print(
-        "*********************this is evaluations parameters : *********************************************\n"
-    )
-    print(
-        "*********************this is evaluations parameters : *********************************************\n"
-    )

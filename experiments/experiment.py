@@ -543,33 +543,6 @@ class DeSurvExperiment(NFGExperiment):
 
 
 class CoxPHExperiment(Experiment):
-    def __init__(
-        self,
-        hyper_grid=None,
-        n_iter=100,
-        fold=None,
-        k=5,
-        random_seed=0,
-        path="results",
-        save=True,
-        delete_log=False,
-        times=100,
-    ):
-
-        super().__init__(
-            hyper_grid=hyper_grid,
-            n_iter=n_iter,
-            fold=fold,
-            k=k,
-            random_seed=random_seed,
-            path=path,
-            save=save,
-            delete_log=delete_log,
-            times=times,
-        )
-
-        self.eval_params = None
-
     def _fit_(self, x, t, e, x_val, t_val, e_val, hyperparameter, cause_specific=False):
         pen = hyperparameter.pop("penalizer", 0.01)
         from coxph.coxph_api import CoxPHFG
@@ -592,41 +565,8 @@ class CoxPHExperiment(Experiment):
         S.columns = pd.MultiIndex.from_product([[r], times])
         return S
 
-    def get_eval_metrics(
-        self,
-    ):
-        self.eval_params = [coxph.eval_params for coxph in self.best_model.values()]
-        return self.eval_params
-
 
 class RSFExperiment(Experiment):
-    def __init__(
-        self,
-        hyper_grid=None,
-        n_iter=100,
-        fold=None,
-        k=5,
-        random_seed=0,
-        path="results",
-        save=True,
-        delete_log=False,
-        times=100,
-    ):
-
-        super().__init__(
-            hyper_grid=hyper_grid,
-            n_iter=n_iter,
-            fold=fold,
-            k=k,
-            random_seed=random_seed,
-            path=path,
-            save=save,
-            delete_log=delete_log,
-            times=times,
-        )
-
-        self.eval_params = None
-
     def _fit_(self, x, t, e, x_val, t_val, e_val, hyperparameter, cause_specific=False):
         n_estimators = hyperparameter.pop("n_estimators", 200)
         max_depth = hyperparameter.pop("max_depth", 10)
@@ -685,41 +625,8 @@ class RSFExperiment(Experiment):
             index=index
         )
 
-    def get_eval_metrics(
-        self,
-    ):
-        self.eval_params = [rsf.eval_params for rsf in self.best_model.values()]
-        return self.eval_params
-
 
 class XGBoostExperiment(Experiment):
-    def __init__(
-        self,
-        hyper_grid=None,
-        n_iter=100,
-        fold=None,
-        k=5,
-        random_seed=0,
-        path="results",
-        save=True,
-        delete_log=False,
-        times=100,
-    ):
-
-        super().__init__(
-            hyper_grid=hyper_grid,
-            n_iter=n_iter,
-            fold=fold,
-            k=k,
-            random_seed=random_seed,
-            path=path,
-            save=save,
-            delete_log=delete_log,
-            times=times,
-        )
-
-        self.eval_params = None
-
     def _fit_(self, x, t, e, x_val, t_val, e_val, hyperparameter, cause_specific=False):
         n_estimators = hyperparameter.pop("n_estimators", 200)
         learning_rate = hyperparameter.pop("learning_rate", 0.05)
@@ -763,12 +670,6 @@ class XGBoostExperiment(Experiment):
             columns=pd.MultiIndex.from_product([[r], self.times]),
             index=index
         )
-
-    def get_eval_metrics(
-        self,
-    ):
-        self.eval_params = [model_.eval_params for model_ in self.best_model.values()]
-        return self.eval_params
 
 
 class DeepSurvExperiment(NFGExperiment):
@@ -826,7 +727,7 @@ class DeepSurvExperiment(NFGExperiment):
         )
 
 
-class CoxPH_TabPFN_embeddings(CoxPHExperiment):
+class TabPFN(Experiment):
     def __init__(
         self,
         hyper_grid=None,
@@ -853,38 +754,6 @@ class CoxPH_TabPFN_embeddings(CoxPHExperiment):
         )
 
         self.tabpfn_train_data = {}
-
-    def _predict_(self, model, x, r, index):
-        from tfm.TabPFN.extract_embeddings import get_embeddings_tabpfn
-
-        fold = int(self.fold_assignment.loc[index[0]])
-
-        train_info = self.tabpfn_train_data[fold]
-        X_train_df = pd.DataFrame(train_info["X_train"])
-        t_train = pd.Series(train_info["t_train"])
-        e_train = pd.Series(train_info["e_train"])
-
-        X_test_df = pd.DataFrame(x, index=index)
-
-        _, X_test_emb = get_embeddings_tabpfn(
-            X_train=X_train_df,
-            X_test=X_test_df,
-            t_train=t_train,
-            e_train=e_train,
-            data_frame_output=False,
-        )
-
-        X_emb_df = pd.DataFrame(X_test_emb, index=index)
-
-        times = np.asarray(self.times, dtype=float)
-        S = model.model.predict_survival_function(X_emb_df, times=times)
-        S = S.T
-        assert (
-            len(index) == S.shape[0]
-        ), f"index len {len(index)} != S rows {S.shape[0]}"
-        S.index = index
-        S.columns = pd.MultiIndex.from_product([[r], times])
-        return S
 
     def train(self, x, t, e, cause_specific=False):
         """
@@ -1031,41 +900,42 @@ class CoxPH_TabPFN_embeddings(CoxPHExperiment):
         if self.all_fold is None:
             return self.save_results(x_scaled)
 
-    def get_eval_metrics(
-        self,
-    ):
-        self.eval_params = [model_.eval_params for model_ in self.best_model.values()]
-        return self.eval_params
 
+class CoxPH_TabPFN_embeddings(TabPFN, CoxPHExperiment):
+    def _predict_(self, model, x, r, index):
+        from tfm.TabPFN.extract_embeddings import get_embeddings_tabpfn
 
-class RSF_TabPFN_embeddings_Experiment(RSFExperiment):
-    def __init__(
-        self,
-        hyper_grid=None,
-        n_iter=100,
-        fold=None,
-        k=5,
-        random_seed=0,
-        path="results",
-        save=True,
-        delete_log=False,
-        times=100,
-    ):
+        fold = int(self.fold_assignment.loc[index[0]])
 
-        super().__init__(
-            hyper_grid=hyper_grid,
-            n_iter=n_iter,
-            fold=fold,
-            k=k,
-            random_seed=random_seed,
-            path=path,
-            save=save,
-            delete_log=delete_log,
-            times=times,
+        train_info = self.tabpfn_train_data[fold]
+        X_train_df = pd.DataFrame(train_info["X_train"])
+        t_train = pd.Series(train_info["t_train"])
+        e_train = pd.Series(train_info["e_train"])
+
+        X_test_df = pd.DataFrame(x, index=index)
+
+        _, X_test_emb = get_embeddings_tabpfn(
+            X_train=X_train_df,
+            X_test=X_test_df,
+            t_train=t_train,
+            e_train=e_train,
+            data_frame_output=False,
         )
 
-        self.tabpfn_train_data = {}
-    
+        X_emb_df = pd.DataFrame(X_test_emb, index=index)
+
+        times = np.asarray(self.times, dtype=float)
+        S = model.model.predict_survival_function(X_emb_df, times=times)
+        S = S.T
+        assert (
+            len(index) == S.shape[0]
+        ), f"index len {len(index)} != S rows {S.shape[0]}"
+        S.index = index
+        S.columns = pd.MultiIndex.from_product([[r], times])
+        return S
+
+
+class RSF_TabPFN_embeddings_Experiment(TabPFN, RSFExperiment):    
     def _predict_(self, model, x, r, index):
         from tfm.TabPFN.extract_embeddings import get_embeddings_tabpfn
 
@@ -1109,186 +979,8 @@ class RSF_TabPFN_embeddings_Experiment(RSFExperiment):
 
         return S
 
-    def train(self, x, t, e, cause_specific=False):
-        """
-        Cross validation model
 
-        Args:
-            x (Dataframe n * d): Observed covariates
-            t (Dataframe n): Time of censoring or event
-            e (Dataframe n): Event indicator
-
-            cause_specific (bool): If model should be trained in cause specific setting
-
-        Returns:
-            (Dict, Dict): Dict of fitted model and Dict of observed performances
-        """
-        from tfm.TabPFN.extract_embeddings import get_embeddings_tabpfn
-
-        self.times = np.linspace(t.min(), t.max(), self.times)
-        self.scaler = StandardScaler()
-        x_scaled = self.scaler.fit_transform(x)
-        e = e.astype(int)
-
-        self.risks = np.unique(e[e > 0])
-        self.fold_assignment = pd.Series(np.nan, index=range(len(x_scaled)))
-        groups = None
-        if isinstance(self.k, list):
-            kf = GroupKFold()
-            groups = self.k
-        elif self.k == 1:
-            kf = ShuffleSplit(
-                n_splits=self.k, random_state=self.random_seed, test_size=0.2
-            )
-        else:
-            kf = StratifiedKFold(
-                n_splits=self.k, random_state=self.random_seed, shuffle=True
-            )
-
-        if self.best_nll is None:
-            self.best_nll = np.inf
-        for i, (train_index, test_index) in enumerate(
-            kf.split(x_scaled, e, groups=groups)
-        ):
-            self.fold_assignment[test_index] = i
-
-            self.tabpfn_train_data[i] = {
-                "X_train": x[train_index],
-                "t_train": t[train_index],
-                "e_train": e[train_index],
-            }
-
-            if i < self.fold:
-                continue
-            if self.all_fold is not None and self.all_fold != i:
-                continue
-            print(f"Fold {i}")
-
-            train_index, dev_index = train_test_split(
-                train_index,
-                test_size=0.2,
-                random_state=self.random_seed,
-                stratify=e[train_index],
-            )
-            dev_index, val_index = train_test_split(
-                dev_index,
-                test_size=0.5,
-                random_state=self.random_seed,
-                stratify=e[dev_index],
-            )
-
-            # raw arrays for this fold
-            x_train = x_scaled[train_index]
-            x_dev = x_scaled[dev_index]
-            x_val = x_scaled[val_index]
-
-            t_train = t[train_index]
-            t_dev = t[dev_index]
-            t_val = t[val_index]
-
-            e_train = e[train_index]
-            e_dev = e[dev_index]
-            e_val = e[val_index]
-
-            # TabPFN embeddings
-            # train + dev embeddings
-            x_train_emb, x_dev_emb = get_embeddings_tabpfn(
-                X_train=x_train,
-                X_test=x_dev,
-                t_train=t_train,
-                e_train=e_train,
-                data_frame_output=False,
-            )
-            # train + val embeddings
-            _, x_val_emb = get_embeddings_tabpfn(
-                X_train=x_train,
-                X_test=x_val,
-                t_train=t_train,
-                e_train=e_train,
-                data_frame_output=False,
-            )
-
-            # Train on subset one domain
-            ## Grid search best params
-            for j, hyper in enumerate(self.hyper_grid):
-                if j < self.iter:
-                    continue
-
-                np.random.seed(self.random_seed)
-                torch.manual_seed(self.random_seed)
-
-                start_time = time.process_time()
-                model = self._fit_(
-                    x_train_emb,
-                    t_train,
-                    e_train,
-                    x_val_emb,
-                    t_val,
-                    e_val,
-                    hyper.copy(),
-                    cause_specific=cause_specific,
-                )
-                self.running_time += time.process_time() - start_time
-
-                nll = self._nll_(
-                    model,
-                    x_dev_emb,
-                    t_dev,
-                    e_dev,
-                    e_train,
-                    t_train,
-                )
-
-                if nll < self.best_nll:
-                    self.best_hyper[i] = hyper
-                    self.best_model[i] = model
-                    self.best_nll = nll
-
-                self.iter = j + 1
-                self.save(self)
-
-            self.fold, self.iter = i + 1, 0
-            self.best_nll = np.inf
-            self.save(self)
-
-        if self.all_fold is None:
-            return self.save_results(x_scaled)
-
-    def get_eval_metrics(
-        self,
-    ):
-        self.eval_params = [model_.eval_params for model_ in self.best_model.values()]
-        return self.eval_params
-
-
-class XGBoost_TabPFN_embeddings_Experiment(XGBoostExperiment):
-    def __init__(
-        self,
-        hyper_grid=None,
-        n_iter=100,
-        fold=None,
-        k=5,
-        random_seed=0,
-        path="results",
-        save=True,
-        delete_log=False,
-        times=100,
-    ):
-
-        super().__init__(
-            hyper_grid=hyper_grid,
-            n_iter=n_iter,
-            fold=fold,
-            k=k,
-            random_seed=random_seed,
-            path=path,
-            save=save,
-            delete_log=delete_log,
-            times=times,
-        )
-
-        self.tabpfn_train_data = {}
-
+class XGBoost_TabPFN_embeddings_Experiment(TabPFN, XGBoostExperiment):
     def _predict_(self, model, x, r, index):
         from tfm.TabPFN.extract_embeddings import get_embeddings_tabpfn
 
@@ -1323,185 +1015,7 @@ class XGBoost_TabPFN_embeddings_Experiment(XGBoostExperiment):
         )
 
 
-    def train(self, x, t, e, cause_specific=False):
-        """
-        Cross validation model
-
-        Args:
-            x (Dataframe n * d): Observed covariates
-            t (Dataframe n): Time of censoring or event
-            e (Dataframe n): Event indicator
-
-            cause_specific (bool): If model should be trained in cause specific setting
-
-        Returns:
-            (Dict, Dict): Dict of fitted model and Dict of observed performances
-        """
-        from tfm.TabPFN.extract_embeddings import get_embeddings_tabpfn
-
-        self.times = np.linspace(t.min(), t.max(), self.times)
-        self.scaler = StandardScaler()
-        x_scaled = self.scaler.fit_transform(x)
-        e = e.astype(int)
-
-        self.risks = np.unique(e[e > 0])
-        self.fold_assignment = pd.Series(np.nan, index=range(len(x_scaled)))
-        groups = None
-        if isinstance(self.k, list):
-            kf = GroupKFold()
-            groups = self.k
-        elif self.k == 1:
-            kf = ShuffleSplit(
-                n_splits=self.k, random_state=self.random_seed, test_size=0.2
-            )
-        else:
-            kf = StratifiedKFold(
-                n_splits=self.k, random_state=self.random_seed, shuffle=True
-            )
-
-        if self.best_nll is None:
-            self.best_nll = np.inf
-        for i, (train_index, test_index) in enumerate(
-            kf.split(x_scaled, e, groups=groups)
-        ):
-            self.fold_assignment[test_index] = i
-
-            self.tabpfn_train_data[i] = {
-                "X_train": x[train_index],
-                "t_train": t[train_index],
-                "e_train": e[train_index],
-            }
-
-            if i < self.fold:
-                continue
-            if self.all_fold is not None and self.all_fold != i:
-                continue
-            print(f"Fold {i}")
-
-            train_index, dev_index = train_test_split(
-                train_index,
-                test_size=0.2,
-                random_state=self.random_seed,
-                stratify=e[train_index],
-            )
-            dev_index, val_index = train_test_split(
-                dev_index,
-                test_size=0.5,
-                random_state=self.random_seed,
-                stratify=e[dev_index],
-            )
-
-            # raw arrays for this fold
-            x_train = x_scaled[train_index]
-            x_dev = x_scaled[dev_index]
-            x_val = x_scaled[val_index]
-
-            t_train = t[train_index]
-            t_dev = t[dev_index]
-            t_val = t[val_index]
-
-            e_train = e[train_index]
-            e_dev = e[dev_index]
-            e_val = e[val_index]
-
-            # TabPFN embeddings
-            # train + dev embeddings
-            x_train_emb, x_dev_emb = get_embeddings_tabpfn(
-                X_train=x_train,
-                X_test=x_dev,
-                t_train=t_train,
-                e_train=e_train,
-                data_frame_output=False,
-            )
-            # train + val embeddings
-            _, x_val_emb = get_embeddings_tabpfn(
-                X_train=x_train,
-                X_test=x_val,
-                t_train=t_train,
-                e_train=e_train,
-                data_frame_output=False,
-            )
-
-            # Train on subset one domain
-            ## Grid search best params
-            for j, hyper in enumerate(self.hyper_grid):
-                if j < self.iter:
-                    continue
-
-                np.random.seed(self.random_seed)
-                torch.manual_seed(self.random_seed)
-
-                start_time = time.process_time()
-                model = self._fit_(
-                    x_train_emb,
-                    t_train,
-                    e_train,
-                    x_val_emb,
-                    t_val,
-                    e_val,
-                    hyper.copy(),
-                    cause_specific=cause_specific,
-                )
-                self.running_time += time.process_time() - start_time
-
-                nll = self._nll_(
-                    model,
-                    x_dev_emb,
-                    t_dev,
-                    e_dev,
-                    e_train,
-                    t_train,
-                )
-
-                if nll < self.best_nll:
-                    self.best_hyper[i] = hyper
-                    self.best_model[i] = model
-                    self.best_nll = nll
-
-                self.iter = j + 1
-                self.save(self)
-
-            self.fold, self.iter = i + 1, 0
-            self.best_nll = np.inf
-            self.save(self)
-
-        if self.all_fold is None:
-            return self.save_results(x_scaled)
-
-    def get_eval_metrics(
-        self,
-    ):
-        self.eval_params = [model_.eval_params for model_ in self.best_model.values()]
-        return self.eval_params
-
-
-class DeepSurv_TabPFN_embeddings_Experiment(DeepSurvExperiment):
-    def __init__(
-        self,
-        hyper_grid=None,
-        n_iter=100,
-        fold=None,
-        k=5,
-        random_seed=0,
-        path="results",
-        save=True,
-        delete_log=False,
-        times=100,
-    ):
-
-        super().__init__(
-            hyper_grid=hyper_grid,
-            n_iter=n_iter,
-            fold=fold,
-            k=k,
-            random_seed=random_seed,
-            path=path,
-            save=save,
-            delete_log=delete_log,
-            times=times,
-        )
-
-        self.tabpfn_train_data = {}
+class DeepSurv_TabPFN_embeddings_Experiment(TabPFN, DeepSurvExperiment):
     def _predict_(self, model, x, r, index):
         from tfm.TabPFN.extract_embeddings import get_embeddings_tabpfn
 
@@ -1524,163 +1038,41 @@ class DeepSurv_TabPFN_embeddings_Experiment(DeepSurvExperiment):
 
         X_emb_df = pd.DataFrame(X_test_emb, index=index)
 
-        # ****************************************************************
-
         surv_probs = model.predict_survival(X_emb_df, self.times.tolist())
-        # surv_probs shape is (n_samples, n_times)
-        
+
         return pd.DataFrame(
             surv_probs,
             columns=pd.MultiIndex.from_product([[r], self.times]),
             index=index
         )
-    
 
-    def train(self, x, t, e, cause_specific=False):
-        """
-        Cross validation model
 
-        Args:
-            x (Dataframe n * d): Observed covariates
-            t (Dataframe n): Time of censoring or event
-            e (Dataframe n): Event indicator
-
-            cause_specific (bool): If model should be trained in cause specific setting
-
-        Returns:
-            (Dict, Dict): Dict of fitted model and Dict of observed performances
-        """
+class NFG_TabPFN_embeddings_Experiment(TabPFN, NFGExperiment):
+    def _predict_(self, model, x, r, index):
         from tfm.TabPFN.extract_embeddings import get_embeddings_tabpfn
 
-        self.times = np.linspace(t.min(), t.max(), self.times)
-        self.scaler = StandardScaler()
-        x_scaled = self.scaler.fit_transform(x)
-        e = e.astype(int)
+        fold = int(self.fold_assignment.loc[index[0]])
 
-        self.risks = np.unique(e[e > 0])
-        self.fold_assignment = pd.Series(np.nan, index=range(len(x_scaled)))
-        groups = None
-        if isinstance(self.k, list):
-            kf = GroupKFold()
-            groups = self.k
-        elif self.k == 1:
-            kf = ShuffleSplit(
-                n_splits=self.k, random_state=self.random_seed, test_size=0.2
-            )
-        else:
-            kf = StratifiedKFold(
-                n_splits=self.k, random_state=self.random_seed, shuffle=True
-            )
+        train_info = self.tabpfn_train_data[fold]
+        X_train_df = pd.DataFrame(train_info["X_train"])
+        t_train = pd.Series(train_info["t_train"])
+        e_train = pd.Series(train_info["e_train"])
 
-        if self.best_nll is None:
-            self.best_nll = np.inf
-        for i, (train_index, test_index) in enumerate(
-            kf.split(x_scaled, e, groups=groups)
-        ):
-            self.fold_assignment[test_index] = i
+        X_test_df = pd.DataFrame(x, index=index)
 
-            self.tabpfn_train_data[i] = {
-                "X_train": x[train_index],
-                "t_train": t[train_index],
-                "e_train": e[train_index],
-            }
+        _, X_test_emb = get_embeddings_tabpfn(
+            X_train=X_train_df,
+            X_test=X_test_df,
+            t_train=t_train,
+            e_train=e_train,
+            data_frame_output=False,
+        )
 
-            if i < self.fold:
-                continue
-            if self.all_fold is not None and self.all_fold != i:
-                continue
-            print(f"Fold {i}")
-
-            train_index, dev_index = train_test_split(
-                train_index,
-                test_size=0.2,
-                random_state=self.random_seed,
-                stratify=e[train_index],
-            )
-            dev_index, val_index = train_test_split(
-                dev_index,
-                test_size=0.5,
-                random_state=self.random_seed,
-                stratify=e[dev_index],
-            )
-
-            # raw arrays for this fold
-            x_train = x_scaled[train_index]
-            x_dev = x_scaled[dev_index]
-            x_val = x_scaled[val_index]
-
-            t_train = t[train_index]
-            t_dev = t[dev_index]
-            t_val = t[val_index]
-
-            e_train = e[train_index]
-            e_dev = e[dev_index]
-            e_val = e[val_index]
-
-            # TabPFN embeddings
-            # train + dev embeddings
-            x_train_emb, x_dev_emb = get_embeddings_tabpfn(
-                X_train=x_train,
-                X_test=x_dev,
-                t_train=t_train,
-                e_train=e_train,
-                data_frame_output=False,
-            )
-            # train + val embeddings
-            _, x_val_emb = get_embeddings_tabpfn(
-                X_train=x_train,
-                X_test=x_val,
-                t_train=t_train,
-                e_train=e_train,
-                data_frame_output=False,
-            )
-
-            # Train on subset one domain
-            ## Grid search best params
-            for j, hyper in enumerate(self.hyper_grid):
-                if j < self.iter:
-                    continue
-
-                np.random.seed(self.random_seed)
-                torch.manual_seed(self.random_seed)
-
-                start_time = time.process_time()
-                model = self._fit_(
-                    x_train_emb,
-                    t_train,
-                    e_train,
-                    x_val_emb,
-                    t_val,
-                    e_val,
-                    hyper.copy(),
-                    cause_specific=cause_specific,
-                )
-                self.running_time += time.process_time() - start_time
-
-                nll = self._nll_(
-                    model,
-                    x_dev_emb,
-                    t_dev,
-                    e_dev,
-                    e_train,
-                    t_train,
-                )
-
-                if nll < self.best_nll:
-                    self.best_hyper[i] = hyper
-                    self.best_model[i] = model
-                    self.best_nll = nll
-
-                self.iter = j + 1
-                self.save(self)
-
-            self.fold, self.iter = i + 1, 0
-            self.best_nll = np.inf
-            self.save(self)
-
-        if self.all_fold is None:
-            return self.save_results(x_scaled)
-
-
-class NFG_TabPFN_embeddings_Experiment(NFGExperiment):
-    pass
+        X_emb_df = pd.DataFrame(X_test_emb, index=index)
+        return pd.DataFrame(
+            model.predict_survival(
+                X_emb_df, self.times.tolist(), r if model.torch_model.risks >= r else 1
+            ),
+            columns=pd.MultiIndex.from_product([[r], self.times]),
+            index=index,
+        )

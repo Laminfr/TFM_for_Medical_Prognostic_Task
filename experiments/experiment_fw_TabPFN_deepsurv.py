@@ -22,27 +22,22 @@ if __name__ == "__main__":
     batch = [100, 250]
 
     param_grid_deepsurv = {
-        'layers': [[50], [50, 50], [100, 100]],
-        'learning_rate': [1e-3, 1e-4],
-        'dropout': [0.0, 0.25, 0.5],
-        'epochs': [500],
-        'batch': [256],
-        'patience_max': [5]
+        "layers": [[50], [50, 50], [100, 100]],
+        "learning_rate": [1e-3, 1e-4],
+        "dropout": [0.0, 0.25, 0.5],
+        "epochs": [500],
+        "batch": [256],
+        "patience_max": [5],
     }
 
     experiment = DeepSurv_TabPFN_embeddings_Experiment.create(
         param_grid_deepsurv,
         n_iter=grid_search,
-        path="Results/{}_tabpfn_deepsurv".format(dataset),
+        path="/vol/miltank/users/frou/Documents/TFM_for_medical_prognosis/Results/{}_TabPFN_deepsurv".format(
+            dataset
+        ),
         random_seed=random_seed,
         fold=fold,
     )
 
     experiment.train(x, t, e, covariates)
-
-    print(
-        "*********************this is evaluations parameters : *********************************************\n"
-    )
-    print(
-        "*********************this is evaluations parameters : *********************************************\n"
-    )

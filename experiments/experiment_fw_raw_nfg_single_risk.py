@@ -43,6 +43,6 @@ param_grid = {
 
 NFGExperiment.create(param_grid, 
                      n_iter = grid_search, 
-                     path = 'Results/{}_nfg'.format(dataset), 
+                     path = '/vol/miltank/users/frou/Documents/TFM_for_medical_prognosis/Results/{}_raw_nfg'.format(dataset), 
                      random_seed = random_seed, 
                      fold = fold).train(x, t, e)

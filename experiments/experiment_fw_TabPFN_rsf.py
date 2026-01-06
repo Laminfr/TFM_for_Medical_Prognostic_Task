@@ -34,7 +34,7 @@ if __name__ == "__main__":
     experiment = RSF_TabPFN_embeddings_Experiment.create(
         param_grid_cox,
         n_iter=grid_search,
-        path="Results/{}_TabPFN_rsf_nfg".format(dataset),
+        path="/vol/miltank/users/frou/Documents/TFM_for_medical_prognosis/Results/{}_TabPFN_rsf".format(dataset),
         random_seed=random_seed,
         fold=fold
     )
@@ -43,45 +43,45 @@ if __name__ == "__main__":
 
 
 
-    print ("*********************this is evaluations parameters : *********************************************\n")
-    results = experiment.get_eval_metrics()
-    none_report = []
-    print("\n=== Model Metrics ===\n")
+    # print ("*********************this is evaluations parameters : *********************************************\n")
+    # results = experiment.get_eval_metrics()
+    # none_report = []
+    # print("\n=== Model Metrics ===\n")
 
-    for i, d in enumerate(results, 1):
-        c_tr = d.get("c_index_train")
-        c_val = d.get("c_index_val")
-        c_pre = d.get("c_index_predict")
-        ibs   = d.get("ibs_val")
+    # for i, d in enumerate(results, 1):
+    #     c_tr = d.get("c_index_train")
+    #     c_val = d.get("c_index_val")
+    #     c_pre = d.get("c_index_predict")
+    #     ibs   = d.get("ibs_val")
 
-        metrics = {
-            "C-index Train": c_tr,
-            "C-index Val": c_val,
-            "C-index Predict": c_pre,
-            "IBS Val": ibs
-        }
+    #     metrics = {
+    #         "C-index Train": c_tr,
+    #         "C-index Val": c_val,
+    #         "C-index Predict": c_pre,
+    #         "IBS Val": ibs
+    #     }
 
-        none_fields = [name for name, val in metrics.items() if val is None]
-        if none_fields:
-            none_report.append((i, none_fields))
+    #     none_fields = [name for name, val in metrics.items() if val is None]
+    #     if none_fields:
+    #         none_report.append((i, none_fields))
 
-        formatted_parts = []
-        for name, val in metrics.items():
-            if val is None:
-                continue
-            formatted_parts.append(f"{name}: {val:.4f}")
+    #     formatted_parts = []
+    #     for name, val in metrics.items():
+    #         if val is None:
+    #             continue
+    #         formatted_parts.append(f"{name}: {val:.4f}")
 
-        if not formatted_parts:
-            formatted_parts.append("NO METRICS AVAILABLE (all None)")
+    #     if not formatted_parts:
+    #         formatted_parts.append("NO METRICS AVAILABLE (all None)")
 
-        print(f"Model {i:2d} | " + " | ".join(formatted_parts))
+    #     print(f"Model {i:2d} | " + " | ".join(formatted_parts))
 
-    print("\n=== None Value Report ===")
-    if not none_report:
-        print("No None values found. All metrics are valid.")
-    else:
-        for model_idx, fields in none_report:
-            print(f"Model {model_idx}: {', '.join(fields)} were None")
+    # print("\n=== None Value Report ===")
+    # if not none_report:
+    #     print("No None values found. All metrics are valid.")
+    # else:
+    #     for model_idx, fields in none_report:
+    #         print(f"Model {model_idx}: {', '.join(fields)} were None")
 
 
-    print ("*********************this is evaluations parameters : *********************************************\n")
+    # print ("*********************this is evaluations parameters : *********************************************\n")
