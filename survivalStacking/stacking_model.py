@@ -14,9 +14,12 @@ Key Benefits over Cox-based approaches:
 
 import numpy as np
 import pandas as pd
+import pickle
+from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, Union
 from sklearn.base import BaseEstimator
 from sklearn.model_selection import RandomizedSearchCV
+from sklearn.isotonic import IsotonicRegression
 import warnings
 
 try:
@@ -54,6 +57,15 @@ class SurvivalStackingModel(BaseEstimator):
         Note: 'tabicl' uses TabICL directly for binary classification (no embeddings)
     classifier_params : dict, optional
         Parameters for the base classifier
+    calibrate : bool, default=True
+        Whether to apply isotonic regression calibration on validation data.
+        This improves IBS (calibration) while preserving C-Index (ranking).
+    weighting_strategy : str, default='adaptive'
+        How to compute scale_pos_weight:
+        - 'adaptive': Milder weighting for small datasets (log-based), stronger for large
+        - 'sqrt': Always use sqrt(imbalance_ratio) 
+        - 'full': Use full imbalance_ratio (aggressive, may hurt calibration)
+        - 'none': No class weighting (scale_pos_weight=1)
     random_state : int, default=42
         Random seed for reproducibility
         
@@ -63,6 +75,8 @@ class SurvivalStackingModel(BaseEstimator):
         Fitted time discretizer
     classifier_ : BaseEstimator
         Trained binary classifier
+    calibrator_ : IsotonicRegression or None
+        Fitted calibrator (if calibrate=True and validation data provided)
     """
     
     def __init__(
@@ -71,18 +85,24 @@ class SurvivalStackingModel(BaseEstimator):
         interval_strategy: str = 'quantile',
         classifier: str = 'xgboost',
         classifier_params: Optional[Dict[str, Any]] = None,
+        calibrate: bool = True,
+        weighting_strategy: str = 'adaptive',
         random_state: int = 42
     ):
         self.n_intervals = n_intervals
         self.interval_strategy = interval_strategy
         self.classifier = classifier
         self.classifier_params = classifier_params or {}
+        self.calibrate = calibrate
+        self.weighting_strategy = weighting_strategy
         self.random_state = random_state
         
         # Fitted attributes
         self.transformer_ = None
         self.classifier_ = None
+        self.calibrator_ = None
         self.classes_ = np.array([0, 1])
+        self._scale_pos_weight_used = None
         
     def _create_classifier(self, scale_pos_weight: float = 1.0) -> BaseEstimator:
         """Initialize the base classifier with configured parameters."""
@@ -230,27 +250,68 @@ class SurvivalStackingModel(BaseEstimator):
         
         # Class weighting based on EXPANDED dataset (y_expanded), not original E
         # This is critical because the person-period format creates severe class imbalance
-        # e.g., 1000 patients with 37% events -> ~10,000 rows with ~3.7% positive rate
         n_neg = (y_expanded == 0).sum()
         n_pos = (y_expanded == 1).sum()
         expanded_imbalance_ratio = n_neg / max(n_pos, 1)
+        n_samples = len(T)
+        n_features = X.shape[1]
         
-        # Always apply class weighting based on expanded data imbalance
-        # Use sqrt for milder correction to avoid over-compensation
-        scale_pos_weight = np.sqrt(expanded_imbalance_ratio)
-        weighting_strategy = f"sqrt of expanded ratio ({expanded_imbalance_ratio:.1f}:1)"
+        # Adaptive weighting strategy based on dataset characteristics
+        if self.weighting_strategy == 'none':
+            scale_pos_weight = 1.0
+            weighting_desc = "none (no class weighting)"
+        elif self.weighting_strategy == 'full':
+            scale_pos_weight = expanded_imbalance_ratio
+            weighting_desc = f"full ratio ({expanded_imbalance_ratio:.1f})"
+        elif self.weighting_strategy == 'sqrt':
+            scale_pos_weight = np.sqrt(expanded_imbalance_ratio)
+            weighting_desc = f"sqrt ({expanded_imbalance_ratio:.1f}:1 -> {scale_pos_weight:.2f})"
+        elif self.weighting_strategy == 'adaptive':
+            # Adaptive: milder weighting for small/low-dimensional datasets
+            # Small datasets + aggressive weighting = overfitting
+            # Formula: log-based for small data, sqrt for large data
+            # 
+            # Dataset examples:
+            #   METABRIC: ~1904 samples × 9 features = ~17,000 -> small
+            #   PBC: ~418 samples × 25 features = ~10,000 -> small
+            #   SUPPORT: ~9105 samples × 24 features = ~218,000 -> large
+            data_complexity = n_samples * n_features
+            
+            if data_complexity < 50000:  # Small dataset (METABRIC, PBC)
+                # Very mild weighting - log-based
+                # For imbalance 10:1, gives weight ~2.2 instead of sqrt(10)=3.16 or 10
+                scale_pos_weight = 1.0 + np.log1p(expanded_imbalance_ratio) / 2
+                weighting_desc = f"mild/log (small data, complexity={data_complexity})"
+            elif data_complexity < 100000:  # Medium dataset
+                # Moderate weighting - cube root
+                # For imbalance 10:1, gives weight ~2.15 instead of sqrt(10)=3.16
+                scale_pos_weight = np.cbrt(expanded_imbalance_ratio)
+                weighting_desc = f"moderate/cbrt (medium data, complexity={data_complexity})"
+            else:  # Large dataset (SUPPORT with its ~218k complexity)
+                # Stronger weighting - sqrt
+                # For imbalance 10:1, gives weight ~3.16
+                scale_pos_weight = np.sqrt(expanded_imbalance_ratio)
+                weighting_desc = f"sqrt (large data, complexity={data_complexity})"
+        else:
+            raise ValueError(f"Unknown weighting_strategy: {self.weighting_strategy}")
+        
+        self._scale_pos_weight_used = scale_pos_weight
         
         if verbose:
             print(f"  - Original event rate: {100*E.mean():.1f}%")
             print(f"  - Expanded event rate: {100*y_expanded.mean():.2f}%")
             print(f"  - Expanded imbalance: {expanded_imbalance_ratio:.1f}:1 (neg:pos)")
-            print(f"  - Class weighting: {weighting_strategy}, scale_pos_weight={scale_pos_weight:.2f}")
+            print(f"  - Weighting strategy: {weighting_desc}")
+            print(f"  - scale_pos_weight: {scale_pos_weight:.2f}")
         
         # Step 3: Create and fit classifier with adaptive class weighting
         self.classifier_ = self._create_classifier(scale_pos_weight=scale_pos_weight)
         
         # Handle validation data if provided
         fit_params = {}
+        X_val_expanded = None
+        y_val_expanded = None
+        
         if X_val is not None and T_val is not None and E_val is not None:
             X_val_expanded, y_val_expanded = self.transformer_.transform(X_val, T_val, E_val)
             
@@ -264,12 +325,86 @@ class SurvivalStackingModel(BaseEstimator):
         
         self.classifier_.fit(X_expanded, y_expanded, **fit_params)
         
+        # Step 4: Calibrate probabilities using isotonic regression
+        # This fixes the "paranoid model" problem where class weighting
+        # improves ranking (C-Index) but destroys calibration (IBS)
+        self.calibrator_ = None
+        if self.calibrate and X_val_expanded is not None:
+            if verbose:
+                print("  - Calibrating probabilities (isotonic regression)...")
+            
+            # Get uncalibrated predictions on validation set
+            probs_uncalibrated = self.classifier_.predict_proba(X_val_expanded)[:, 1]
+            
+            # Fit isotonic regression: maps uncalibrated -> calibrated probabilities
+            self.calibrator_ = IsotonicRegression(
+                y_min=0.0, y_max=1.0, 
+                out_of_bounds='clip'
+            )
+            self.calibrator_.fit(probs_uncalibrated, y_val_expanded)
+            
+            if verbose:
+                # Show calibration effect
+                probs_calibrated = self.calibrator_.predict(probs_uncalibrated)
+                print(f"      Before calibration: mean={probs_uncalibrated.mean():.3f}, "
+                      f"std={probs_uncalibrated.std():.3f}")
+                print(f"      After calibration:  mean={probs_calibrated.mean():.3f}, "
+                      f"std={probs_calibrated.std():.3f}")
+        elif self.calibrate and X_val_expanded is None:
+            if verbose:
+                print("  - Calibration skipped (no validation data provided)")
+        
         if verbose:
             print("  - Done!")
         
         return self
     
-    def predict_hazard(self, X: np.ndarray) -> np.ndarray:
+    def save(self, filepath: Union[str, Path]) -> None:
+        """
+        Save the fitted model to disk.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Path to save the model (will add .pkl extension if not present)
+        """
+        filepath = Path(filepath)
+        if filepath.suffix != '.pkl':
+            filepath = filepath.with_suffix('.pkl')
+        
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(filepath, 'wb') as f:
+            pickle.dump(self, f)
+        
+        print(f"Model saved to: {filepath}")
+    
+    @classmethod
+    def load(cls, filepath: Union[str, Path]) -> 'SurvivalStackingModel':
+        """
+        Load a fitted model from disk.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Path to the saved model
+            
+        Returns
+        -------
+        model : SurvivalStackingModel
+            Loaded model
+        """
+        filepath = Path(filepath)
+        
+        with open(filepath, 'rb') as f:
+            model = pickle.load(f)
+        
+        if not isinstance(model, cls):
+            raise TypeError(f"Loaded object is not a {cls.__name__}")
+        
+        return model
+    
+    def predict_hazard(self, X: np.ndarray, calibrated: bool = True) -> np.ndarray:
         """
         Predict hazard probabilities for all time intervals.
         
@@ -277,6 +412,8 @@ class SurvivalStackingModel(BaseEstimator):
         ----------
         X : np.ndarray
             Feature matrix (n_samples, n_features)
+        calibrated : bool, default=True
+            Whether to apply calibration (if calibrator is fitted)
             
         Returns
         -------
@@ -296,6 +433,10 @@ class SurvivalStackingModel(BaseEstimator):
         
         # Predict hazard probabilities
         hazard_flat = self.classifier_.predict_proba(X_pred)[:, 1]
+        
+        # Apply calibration if available and requested
+        if calibrated and self.calibrator_ is not None:
+            hazard_flat = self.calibrator_.predict(hazard_flat)
         
         # Reshape to (n_samples, n_intervals)
         hazard = hazard_flat.reshape(n_samples, n_intervals)

@@ -99,9 +99,20 @@ def run_survstack_fold(
     X_test: np.ndarray, T_test: np.ndarray, E_test: np.ndarray,
     classifier: str = 'xgboost',
     n_intervals: int = 20,
+    calibrate: bool = True,
+    weighting_strategy: str = 'adaptive',
     verbose: bool = True
-) -> Dict[str, float]:
-    """Run survival stacking on a single fold."""
+) -> Tuple[Dict[str, float], 'SurvivalStackingModel']:
+    """
+    Run survival stacking on a single fold.
+    
+    Returns
+    -------
+    metrics : dict
+        Dictionary with c_index_q25, c_index_q50, c_index_q75, ibs
+    model : SurvivalStackingModel
+        The fitted model
+    """
     
     classifier_params = {
         'n_estimators': 200,
@@ -117,6 +128,8 @@ def run_survstack_fold(
         interval_strategy='quantile',
         classifier=classifier,
         classifier_params=classifier_params,
+        calibrate=calibrate,
+        weighting_strategy=weighting_strategy,
         random_state=42
     )
     
@@ -136,7 +149,7 @@ def run_survstack_fold(
         T_train=T_train, E_train=E_train
     )
     
-    return metrics
+    return metrics, model
 
 
 def run_coxph_fold(
@@ -290,18 +303,34 @@ def run_full_cv(
     T: np.ndarray,
     E: np.ndarray,
     feature_names: List[str],
+    dataset_name: str = 'unknown',
     n_folds: int = 5,
     n_intervals: int = 20,
+    calibrate: bool = True,
+    weighting_strategy: str = 'adaptive',
     run_survstack_raw: bool = True,
     run_survstack_emb: bool = True,
     run_survstack_tabicl: bool = True,
     run_baseline_coxph: bool = True,
     run_baseline_xgboost: bool = True,
     run_baseline_deepsurv: bool = True,
+    save_models: bool = True,
+    models_dir: Optional[Path] = None,
     verbose: bool = True
 ) -> Dict[str, Dict]:
     """
     Run full cross-validation experiment with all methods.
+    
+    Parameters
+    ----------
+    calibrate : bool, default=True
+        Whether to apply isotonic calibration (fixes IBS while keeping C-Index)
+    weighting_strategy : str, default='adaptive'
+        'adaptive', 'sqrt', 'full', or 'none'
+    save_models : bool, default=True
+        Whether to save fitted models
+    models_dir : Path, optional
+        Directory to save models
     
     Returns
     -------
@@ -313,17 +342,28 @@ def run_full_cv(
     print(f"{'='*70}")
     print(f"  Samples: {len(T)}, Events: {E.sum()} ({100*E.mean():.1f}%)")
     print(f"  Folds: {n_folds}")
+    print(f"  Calibration: {calibrate}")
+    print(f"  Weighting: {weighting_strategy}")
+    
+    if save_models and models_dir is None:
+        models_dir = RESULTS_DIR / 'models' / dataset_name
+    if models_dir:
+        models_dir.mkdir(parents=True, exist_ok=True)
     
     skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
     
     # Initialize results storage
     methods = []
+    survstack_methods = []  # Track which methods are survstack (for model saving)
     if run_survstack_raw:
         methods.append('survstack_raw')
+        survstack_methods.append('survstack_raw')
     if run_survstack_emb:
         methods.append('survstack_emb')
+        survstack_methods.append('survstack_emb')
     if run_survstack_tabicl:
         methods.append('survstack_tabicl')
+        survstack_methods.append('survstack_tabicl')
     if run_baseline_coxph:
         methods.append('coxph')
     if run_baseline_xgboost:
@@ -332,6 +372,10 @@ def run_full_cv(
         methods.append('deepsurv')
     
     fold_results = {m: [] for m in methods}
+    
+    # Track best models (by C-Index on test set)
+    best_models = {m: None for m in survstack_methods}
+    best_scores = {m: -1.0 for m in survstack_methods}
     
     for fold_idx, (train_val_idx, test_idx) in enumerate(skf.split(X, E)):
         print(f"\n{'─'*50}")
@@ -367,43 +411,58 @@ def run_full_cv(
         
         # 1. SurvStack with Raw features + XGBoost
         if run_survstack_raw:
-            print("\n  [1/6] SurvStack-Raw (XGBoost)...")
+            print("\n  [1/6] SurvStack-Raw (XGBoost + calibration)...")
             try:
-                metrics = run_survstack_fold(
+                metrics, model = run_survstack_fold(
                     X_train, T_train, E_train,
                     X_val, T_val, E_val,
                     X_test, T_test, E_test,
                     classifier='xgboost',
                     n_intervals=n_intervals,
+                    calibrate=calibrate,
+                    weighting_strategy=weighting_strategy,
                     verbose=(fold_idx == 0 and verbose)
                 )
                 fold_results['survstack_raw'].append(metrics)
                 print(f"      C-Index: {metrics['c_index_q50']:.4f}, IBS: {metrics['ibs']:.4f}")
+                
+                # Track best model
+                if save_models and metrics['c_index_q50'] > best_scores['survstack_raw']:
+                    best_scores['survstack_raw'] = metrics['c_index_q50']
+                    best_models['survstack_raw'] = model
             except Exception as e:
                 print(f"      FAILED: {e}")
+                traceback.print_exc()
                 fold_results['survstack_raw'].append({
                     'c_index_q25': 0, 'c_index_q50': 0, 'c_index_q75': 0, 'ibs': 0
                 })
         
         # 2. SurvStack with Raw + Embeddings + XGBoost
         if run_survstack_emb:
-            print("\n  [2/6] SurvStack-Emb (XGBoost + TabICL embeddings)...")
+            print("\n  [2/6] SurvStack-Emb (XGBoost + embeddings + calibration)...")
             try:
                 # Apply embeddings
                 X_train_emb, X_val_emb, X_test_emb = apply_tabicl_embeddings(
                     X_train, X_val, X_test, E_train, feature_names,
                     mode='deep+raw', verbose=(fold_idx == 0)
                 )
-                metrics = run_survstack_fold(
+                metrics, model = run_survstack_fold(
                     X_train_emb, T_train, E_train,
                     X_val_emb, T_val, E_val,
                     X_test_emb, T_test, E_test,
                     classifier='xgboost',
                     n_intervals=n_intervals,
+                    calibrate=calibrate,
+                    weighting_strategy=weighting_strategy,
                     verbose=(fold_idx == 0 and verbose)
                 )
                 fold_results['survstack_emb'].append(metrics)
                 print(f"      C-Index: {metrics['c_index_q50']:.4f}, IBS: {metrics['ibs']:.4f}")
+                
+                # Track best model
+                if save_models and metrics['c_index_q50'] > best_scores['survstack_emb']:
+                    best_scores['survstack_emb'] = metrics['c_index_q50']
+                    best_models['survstack_emb'] = model
             except Exception as e:
                 print(f"      FAILED: {e}")
                 fold_results['survstack_emb'].append({
@@ -412,18 +471,25 @@ def run_full_cv(
         
         # 3. SurvStack with Raw + TabICL classifier
         if run_survstack_tabicl:
-            print("\n  [3/6] SurvStack-TabICL (TabICL classifier)...")
+            print("\n  [3/6] SurvStack-TabICL (TabICL classifier + calibration)...")
             try:
-                metrics = run_survstack_fold(
+                metrics, model = run_survstack_fold(
                     X_train, T_train, E_train,
                     X_val, T_val, E_val,
                     X_test, T_test, E_test,
                     classifier='tabicl',
                     n_intervals=n_intervals,
+                    calibrate=calibrate,
+                    weighting_strategy='none',  # TabICL handles imbalance internally
                     verbose=(fold_idx == 0 and verbose)
                 )
                 fold_results['survstack_tabicl'].append(metrics)
                 print(f"      C-Index: {metrics['c_index_q50']:.4f}, IBS: {metrics['ibs']:.4f}")
+                
+                # Track best model
+                if save_models and metrics['c_index_q50'] > best_scores['survstack_tabicl']:
+                    best_scores['survstack_tabicl'] = metrics['c_index_q50']
+                    best_models['survstack_tabicl'] = model
             except Exception as e:
                 print(f"      FAILED: {e}")
                 fold_results['survstack_tabicl'].append({
@@ -493,6 +559,16 @@ def run_full_cv(
                 'fold_results': fold_results[method]
             }
     
+    # Save only the best models (one per method)
+    if save_models and models_dir:
+        print(f"\n{'─'*50}")
+        print("Saving best models...")
+        for method in survstack_methods:
+            if best_models[method] is not None:
+                model_path = models_dir / f'{method}_best.pkl'
+                best_models[method].save(model_path)
+                print(f"  {method}: C-Index={best_scores[method]:.4f} -> {model_path}")
+    
     return results
 
 
@@ -536,6 +612,13 @@ def main():
                         help='Output directory')
     parser.add_argument('--skip-tabicl', action='store_true',
                         help='Skip TabICL-based methods (faster)')
+    parser.add_argument('--no-calibrate', action='store_true',
+                        help='Disable isotonic calibration')
+    parser.add_argument('--weighting', type=str, default='adaptive',
+                        choices=['adaptive', 'sqrt', 'full', 'none'],
+                        help='Class weighting strategy')
+    parser.add_argument('--no-save-models', action='store_true',
+                        help='Do not save fitted models')
     parser.add_argument('--verbose', action='store_true', default=True)
     
     args = parser.parse_args()
@@ -568,6 +651,7 @@ def main():
         # Run experiments
         results = run_full_cv(
             X, T, E, feature_names,
+            dataset_name=dataset,
             n_folds=args.cv,
             n_intervals=args.n_intervals,
             run_survstack_raw=True,
@@ -576,6 +660,10 @@ def main():
             run_baseline_coxph=True,
             run_baseline_xgboost=True,
             run_baseline_deepsurv=True,
+            calibrate=not args.no_calibrate,
+            weighting_strategy=args.weighting,
+            save_models=not args.no_save_models,
+            models_dir=output_dir / 'models' / dataset,
             verbose=args.verbose
         )
         
