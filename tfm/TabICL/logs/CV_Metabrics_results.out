@@ -1,0 +1,571 @@
+==========================================
+TabICL Cross-Validation Analysis
+Job ID: 81247
+Node: atlas
+Started: Mon  1 Dec 19:37:18 CET 2025
+==========================================
+============================================================
+CROSS-VALIDATION ANALYSIS: TabICL on METABRIC
+============================================================
+Folds: 5 | Random Search Iterations: 20
+Modes: ['raw', 'deep', 'deep+raw']
+Models: ['CoxPH', 'RSF', 'XGBoost', 'DeepSurv']
+============================================================
+Running: CoxPH (raw)
+Fold 0
+Fold 1
+Fold 2
+Fold 3
+Fold 4
+  → CoxPH (raw): C-Index=0.6337, IBS=0.1592
+Running: RSF (raw)
+Fold 0
+Fold 1
+Fold 2
+Fold 3
+Fold 4
+  → RSF (raw): C-Index=0.6424, IBS=0.1612
+Running: XGBoost (raw)
+Fold 0
+Fold 1
+Fold 2
+Fold 3
+Fold 4
+  → XGBoost (raw): C-Index=0.6251, IBS=0.2650
+Running: DeepSurv (raw)
+Fold 0
+Early stopping at epoch 19
+Early stopping at epoch 152
+Early stopping at epoch 14
+Early stopping at epoch 76
+Early stopping at epoch 9
+Early stopping at epoch 32
+Early stopping at epoch 21
+Early stopping at epoch 191
+Early stopping at epoch 29
+Early stopping at epoch 129
+Early stopping at epoch 11
+Early stopping at epoch 49
+Early stopping at epoch 29
+Early stopping at epoch 248
+Early stopping at epoch 38
+Early stopping at epoch 183
+Early stopping at epoch 14
+Early stopping at epoch 75
+Fold 1
+Early stopping at epoch 24
+Early stopping at epoch 189
+Early stopping at epoch 26
+Early stopping at epoch 122
+Early stopping at epoch 22
+Early stopping at epoch 103
+Early stopping at epoch 49
+Early stopping at epoch 189
+Early stopping at epoch 34
+Early stopping at epoch 162
+Early stopping at epoch 20
+Early stopping at epoch 77
+Early stopping at epoch 87
+Early stopping at epoch 189
+Early stopping at epoch 63
+Early stopping at epoch 113
+Early stopping at epoch 24
+Early stopping at epoch 111
+Fold 2
+Early stopping at epoch 21
+Early stopping at epoch 156
+Early stopping at epoch 24
+Early stopping at epoch 72
+Early stopping at epoch 9
+Early stopping at epoch 27
+Early stopping at epoch 22
+Early stopping at epoch 194
+Early stopping at epoch 30
+Early stopping at epoch 113
+Early stopping at epoch 10
+Early stopping at epoch 46
+Early stopping at epoch 23
+Early stopping at epoch 208
+Early stopping at epoch 66
+Early stopping at epoch 162
+Early stopping at epoch 16
+Early stopping at epoch 83
+Fold 3
+Early stopping at epoch 27
+Early stopping at epoch 152
+Early stopping at epoch 14
+Early stopping at epoch 58
+Early stopping at epoch 13
+Early stopping at epoch 33
+Early stopping at epoch 28
+Early stopping at epoch 157
+Early stopping at epoch 19
+Early stopping at epoch 96
+Early stopping at epoch 12
+Early stopping at epoch 38
+Early stopping at epoch 43
+Early stopping at epoch 157
+Early stopping at epoch 33
+Early stopping at epoch 120
+Early stopping at epoch 14
+Early stopping at epoch 98
+Fold 4
+Early stopping at epoch 18
+Early stopping at epoch 93
+Early stopping at epoch 11
+Early stopping at epoch 47
+Early stopping at epoch 8
+Early stopping at epoch 30
+Early stopping at epoch 22
+Early stopping at epoch 93
+Early stopping at epoch 13
+Early stopping at epoch 47
+Early stopping at epoch 8
+Early stopping at epoch 38
+Early stopping at epoch 27
+Early stopping at epoch 93
+Early stopping at epoch 47
+Early stopping at epoch 84
+Early stopping at epoch 21
+Early stopping at epoch 74
+  → DeepSurv (raw): C-Index=0.6340, IBS=0.1610
+Running: CoxPH (deep)
+Fold 0: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 512 features
+  → Embeddings: 512 features
+Fold 1: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 512 features
+  → Embeddings: 512 features
+Fold 2: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 512 features
+  → Embeddings: 512 features
+Fold 3: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 512 features
+  → Embeddings: 512 features
+Fold 4: TabICL (deep)
+TabICL: 1219 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 512 features
+  → Embeddings: 512 features
+  → CoxPH (deep): C-Index=0.6369, IBS=0.1626
+Running: RSF (deep)
+Fold 0: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.2% variance)
+  → Final shape: 32 features
+  → Embeddings: 32 features
+Fold 1: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.5% variance)
+  → Final shape: 32 features
+  → Embeddings: 32 features
+Fold 2: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.2% variance)
+  → Final shape: 32 features
+  → Embeddings: 32 features
+Fold 3: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.6% variance)
+  → Final shape: 32 features
+  → Embeddings: 32 features
+Fold 4: TabICL (deep)
+TabICL: 1219 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.5% variance)
+  → Final shape: 32 features
+  → Embeddings: 32 features
+  → RSF (deep): C-Index=0.6257, IBS=0.1654
+Running: XGBoost (deep)
+Fold 0: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.2% variance)
+  → Final shape: 32 features
+  → Embeddings: 32 features
+Fold 1: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.5% variance)
+  → Final shape: 32 features
+  → Embeddings: 32 features
+Fold 2: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.2% variance)
+  → Final shape: 32 features
+  → Embeddings: 32 features
+Fold 3: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.6% variance)
+  → Final shape: 32 features
+  → Embeddings: 32 features
+Fold 4: TabICL (deep)
+TabICL: 1219 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.5% variance)
+  → Final shape: 32 features
+  → Embeddings: 32 features
+  → XGBoost (deep): C-Index=0.6096, IBS=0.2786
+Running: DeepSurv (deep)
+Fold 0: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 512 features
+  → Embeddings: 512 features
+Early stopping at epoch 15
+Early stopping at epoch 60
+Early stopping at epoch 16
+Early stopping at epoch 99
+Early stopping at epoch 14
+Early stopping at epoch 41
+Early stopping at epoch 14
+Early stopping at epoch 68
+Early stopping at epoch 21
+Early stopping at epoch 136
+Early stopping at epoch 14
+Early stopping at epoch 54
+Early stopping at epoch 16
+Early stopping at epoch 59
+Early stopping at epoch 28
+Early stopping at epoch 152
+Early stopping at epoch 19
+Early stopping at epoch 96
+Fold 1: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 512 features
+  → Embeddings: 512 features
+Early stopping at epoch 46
+Early stopping at epoch 310
+Early stopping at epoch 26
+Early stopping at epoch 97
+Early stopping at epoch 18
+Early stopping at epoch 104
+Early stopping at epoch 47
+Early stopping at epoch 340
+Early stopping at epoch 62
+Early stopping at epoch 158
+Early stopping at epoch 31
+Early stopping at epoch 164
+Early stopping at epoch 45
+Early stopping at epoch 117
+Early stopping at epoch 64
+Early stopping at epoch 207
+Early stopping at epoch 32
+Early stopping at epoch 196
+Fold 2: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 512 features
+  → Embeddings: 512 features
+Early stopping at epoch 25
+Early stopping at epoch 136
+Early stopping at epoch 26
+Early stopping at epoch 194
+Early stopping at epoch 29
+Early stopping at epoch 102
+Early stopping at epoch 25
+Early stopping at epoch 136
+Early stopping at epoch 25
+Early stopping at epoch 239
+Early stopping at epoch 34
+Early stopping at epoch 139
+Early stopping at epoch 26
+Early stopping at epoch 170
+Early stopping at epoch 50
+Early stopping at epoch 280
+Early stopping at epoch 65
+Early stopping at epoch 238
+Fold 3: TabICL (deep)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 512 features
+  → Embeddings: 512 features
+Early stopping at epoch 13
+Early stopping at epoch 74
+Early stopping at epoch 14
+Early stopping at epoch 46
+Early stopping at epoch 13
+Early stopping at epoch 46
+Early stopping at epoch 13
+Early stopping at epoch 84
+Early stopping at epoch 15
+Early stopping at epoch 62
+Early stopping at epoch 14
+Early stopping at epoch 58
+Early stopping at epoch 14
+Early stopping at epoch 84
+Early stopping at epoch 20
+Early stopping at epoch 89
+Early stopping at epoch 16
+Early stopping at epoch 89
+Fold 4: TabICL (deep)
+TabICL: 1219 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 512 features
+  → Embeddings: 512 features
+Early stopping at epoch 15
+Early stopping at epoch 85
+Early stopping at epoch 18
+Early stopping at epoch 85
+Early stopping at epoch 15
+Early stopping at epoch 59
+Early stopping at epoch 16
+Early stopping at epoch 85
+Early stopping at epoch 33
+Early stopping at epoch 177
+Early stopping at epoch 16
+Early stopping at epoch 82
+Early stopping at epoch 18
+Early stopping at epoch 85
+Early stopping at epoch 45
+Early stopping at epoch 190
+Early stopping at epoch 24
+Early stopping at epoch 141
+  → DeepSurv (deep): C-Index=0.6224, IBS=0.1661
+Running: CoxPH (deep+raw)
+Fold 0: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 521 features
+  → Embeddings: 521 features
+Fold 1: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 521 features
+  → Embeddings: 521 features
+Fold 2: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 521 features
+  → Embeddings: 521 features
+Fold 3: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 521 features
+  → Embeddings: 521 features
+Fold 4: TabICL (deep+raw)
+TabICL: 1219 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 521 features
+  → Embeddings: 521 features
+  → CoxPH (deep+raw): C-Index=0.6371, IBS=0.1625
+Running: RSF (deep+raw)
+Fold 0: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.2% variance)
+  → Final shape: 41 features
+  → Embeddings: 41 features
+Fold 1: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.5% variance)
+  → Final shape: 41 features
+  → Embeddings: 41 features
+Fold 2: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.2% variance)
+  → Final shape: 41 features
+  → Embeddings: 41 features
+Fold 3: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.6% variance)
+  → Final shape: 41 features
+  → Embeddings: 41 features
+Fold 4: TabICL (deep+raw)
+TabICL: 1219 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.5% variance)
+  → Final shape: 41 features
+  → Embeddings: 41 features
+  → RSF (deep+raw): C-Index=0.6412, IBS=0.1615
+Running: XGBoost (deep+raw)
+Fold 0: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.2% variance)
+  → Final shape: 41 features
+  → Embeddings: 41 features
+Fold 1: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.5% variance)
+  → Final shape: 41 features
+  → Embeddings: 41 features
+Fold 2: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.2% variance)
+  → Final shape: 41 features
+  → Embeddings: 41 features
+Fold 3: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.6% variance)
+  → Final shape: 41 features
+  → Embeddings: 41 features
+Fold 4: TabICL (deep+raw)
+TabICL: 1219 samples, 9 features
+  → Deep embeddings: 512D
+  → PCA: 512D → 32D (96.5% variance)
+  → Final shape: 41 features
+  → Embeddings: 41 features
+  → XGBoost (deep+raw): C-Index=0.6214, IBS=0.2797
+Running: DeepSurv (deep+raw)
+Fold 0: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 521 features
+  → Embeddings: 521 features
+Early stopping at epoch 15
+Early stopping at epoch 71
+Early stopping at epoch 15
+Early stopping at epoch 78
+Early stopping at epoch 15
+Early stopping at epoch 50
+Early stopping at epoch 15
+Early stopping at epoch 87
+Early stopping at epoch 17
+Early stopping at epoch 100
+Early stopping at epoch 16
+Early stopping at epoch 83
+Early stopping at epoch 17
+Early stopping at epoch 89
+Early stopping at epoch 26
+Early stopping at epoch 146
+Early stopping at epoch 20
+Early stopping at epoch 97
+Fold 1: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 521 features
+  → Embeddings: 521 features
+Early stopping at epoch 29
+Early stopping at epoch 41
+Early stopping at epoch 16
+Early stopping at epoch 101
+Early stopping at epoch 28
+Early stopping at epoch 85
+Early stopping at epoch 24
+Early stopping at epoch 41
+Early stopping at epoch 16
+Early stopping at epoch 153
+Early stopping at epoch 35
+Early stopping at epoch 101
+Early stopping at epoch 36
+Early stopping at epoch 54
+Early stopping at epoch 37
+Early stopping at epoch 180
+Early stopping at epoch 60
+Early stopping at epoch 108
+Fold 2: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 521 features
+  → Embeddings: 521 features
+Early stopping at epoch 23
+Early stopping at epoch 117
+Early stopping at epoch 29
+Early stopping at epoch 137
+Early stopping at epoch 18
+Early stopping at epoch 79
+Early stopping at epoch 25
+Early stopping at epoch 152
+Early stopping at epoch 38
+Early stopping at epoch 178
+Early stopping at epoch 19
+Early stopping at epoch 77
+Early stopping at epoch 30
+Early stopping at epoch 164
+Early stopping at epoch 57
+Early stopping at epoch 215
+Early stopping at epoch 38
+Early stopping at epoch 98
+Fold 3: TabICL (deep+raw)
+TabICL: 1218 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 521 features
+  → Embeddings: 521 features
+Early stopping at epoch 13
+Early stopping at epoch 74
+Early stopping at epoch 14
+Early stopping at epoch 67
+Early stopping at epoch 12
+Early stopping at epoch 28
+Early stopping at epoch 22
+Early stopping at epoch 78
+Early stopping at epoch 17
+Early stopping at epoch 95
+Early stopping at epoch 13
+Early stopping at epoch 39
+Early stopping at epoch 25
+Early stopping at epoch 88
+Early stopping at epoch 20
+Early stopping at epoch 176
+Early stopping at epoch 15
+Early stopping at epoch 58
+Fold 4: TabICL (deep+raw)
+TabICL: 1219 samples, 9 features
+  → Deep embeddings: 512D
+  → Final shape: 521 features
+  → Embeddings: 521 features
+Early stopping at epoch 15
+Early stopping at epoch 90
+Early stopping at epoch 15
+Early stopping at epoch 92
+Early stopping at epoch 16
+Early stopping at epoch 41
+Early stopping at epoch 15
+Early stopping at epoch 107
+Early stopping at epoch 16
+Early stopping at epoch 112
+Early stopping at epoch 15
+Early stopping at epoch 48
+Early stopping at epoch 17
+Early stopping at epoch 107
+Early stopping at epoch 27
+Early stopping at epoch 122
+Early stopping at epoch 17
+Early stopping at epoch 74
+  → DeepSurv (deep+raw): C-Index=0.6370, IBS=0.1620
+
+================================================================================
+FINAL SUMMARY
+================================================================================
+
+Model           Mode       C-Index (q50)   IBS       
+--------------------------------------------------
+CoxPH           deep       0.6369        0.1626
+CoxPH           deep+raw   0.6371        0.1625
+CoxPH           raw        0.6337        0.1592
+DeepSurv        deep       0.6224        0.1661
+DeepSurv        deep+raw   0.6370        0.1620
+DeepSurv        raw        0.6340        0.1610
+RSF             deep       0.6257        0.1654
+RSF             deep+raw   0.6412        0.1615
+RSF             raw        0.6424        0.1612
+XGBoost         deep       0.6096        0.2786
+XGBoost         deep+raw   0.6214        0.2797
+XGBoost         raw        0.6251        0.2650
+
+Results saved to: /vol/miltank/users/sajb/Project/NeuralFineGray/tabICL/results/cv_metabric/cv_results_final_20251201_204414.json
+==========================================
+Completed at: Mon  1 Dec 20:44:16 CET 2025
+==========================================

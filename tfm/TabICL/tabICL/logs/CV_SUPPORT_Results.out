@@ -1,0 +1,13 @@
+==========================================
+TabICL Cross-Validation Analysis on SUPPORT (v2)
+Job ID: 81466
+Node: apollo
+Started: Mon  8 Dec 10:55:46 CET 2025
+==========================================
+
+Changes in v2:
+  - Fix A: One-hot encoding for categorical features
+  - Fix B: Lower learning rates for DeepSurv (1e-4, 1e-5)
+  - Strategy B: PCA 32D for RSF, XGBoost
+  - Strategy A/C: Full 512D for DeepSurv, CoxPH
+==========================================

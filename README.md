@@ -48,6 +48,12 @@ We followed the same architecture than the [DeepSurvivalMachines](https://github
 git clone git@github.com:Jeanselme/NeuralFineGray.git --recursive
 ```
 
+---
+
+# TabICL Integration (NEW)
+
+This repository now includes **deep embedding extraction from TabICL** (a tabular foundation model) for improved baseline performance.
+
 ## Requirements
 The model relies on `DeepSurvivalMachines`, `pytorch`, `numpy` and `tqdm`.  
 To run the set of experiments `pycox`, `lifelines`, `pysurvival` are necessary.

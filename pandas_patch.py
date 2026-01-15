@@ -43,12 +43,14 @@ from pandas_patch import pd
 
 This way, all files that use pandas (pd) automatically benefit from the fix.
 """
-
-import pandas as pd
-if not hasattr(pd.Series, "iteritems"):
-    pd.Series.iteritems = pd.Series.items
-_old_describe = pd.DataFrame.describe
+import sys
+import pandas as _pd
+if not hasattr(_pd.Series, "iteritems"):
+    _pd.Series.iteritems = _pd.Series.items
+_old_describe = _pd.DataFrame.describe
 def _describe_compat(self, *args, **kwargs):
     kwargs.pop("datetime_is_numeric", None)
     return _old_describe(self, *args, **kwargs)
-pd.DataFrame.describe = _describe_compat
+_pd.DataFrame.describe = _describe_compat
+pd = _pd
+sys.modules['pandas'] = pd

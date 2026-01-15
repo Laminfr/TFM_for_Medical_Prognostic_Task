@@ -22,8 +22,8 @@ class RSFFG(NeuralFineGray):
         self.min_samples_leaf = min_samples_leaf
         self.random_state = random_state
         self.fitted = False
-
-    # ---------------- fitting ----------------
+        self._train_times = None
+        self._train_events = None
 
     def fit(self, x, t, e, vsize=0.15, val_data=None, random_state=100):
 
@@ -68,6 +68,11 @@ class RSFFG(NeuralFineGray):
 
         self.model = model
         self.fitted = True
+        
+        # Store training data for metrics
+        self._train_times = y_train['time']
+        self._train_events = y_train['event']
+        
         return self
 
     # ------------- predictions -------------

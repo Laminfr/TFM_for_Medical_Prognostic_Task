@@ -7,97 +7,18 @@ import time
 from pandas_patch import pd
 import warnings
 warnings.filterwarnings("ignore", message="TypedStorage is deprecated")
-import seaborn as sns
-import matplotlib.pyplot as plt
+import os
 import sys
 sys.path.append("/")
 
-from ..datasets.data_loader import load_and_preprocess_data
-from ..coxph.utilities import train_cox_model, evaluate_model as evaluate_cox
-from ..xgboost.utilities import train_xgboost_model, evaluate_xgboost_model
-from ..deepsurv.utilities import train_deepsurv_model, evaluate_deepsurv_model
-from ..rsf.utilities import train_rsf_model, evaluate_rsf_model
-from ..tfm.TARTE.extract_embeddings import get_embeddings_tarte, get_embeddings_dummy_tarte, get_embeddings_combination_tarte
+from datasets.data_loader import load_and_preprocess_data
+from coxph.utilities import train_cox_model, evaluate_model as evaluate_cox
+from xgb_survival.utilities import train_xgboost_model, evaluate_xgboost_model
+from deepsurv.utilities import train_deepsurv_model, evaluate_deepsurv_model
+from rsf.utilities import train_rsf_model, evaluate_rsf_model
+from tfm.TARTE.legacy.legacy_embedding_strategies import get_embeddings_tarte, get_embeddings_dummy_tarte, get_embeddings_combination_tarte
+from images.utilities import plot_results_relative, plot_results_absolute
 
-def plot_results_absolute(df_all):
-    import os
-    my_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-    sns.set_theme(style="whitegrid", font_scale=1.2)
-
-    # --- Plot C-index (train) ---
-    plt.figure(figsize=(8, 5))
-    sns.barplot(data=df_all, x="Model", y="C-index (train)", hue="Method")
-    plt.title("Validation C-index Comparison")
-    #plt.ylim(0.5, 1)
-    plt.legend(title="Method", framealpha=0.0)
-    plt.tight_layout()
-    plt.savefig(my_path + "/images/C_train.png")
-
-    # --- Plot C-index (val) ---
-    plt.figure(figsize=(8, 5))
-    sns.barplot(data=df_all, x="Model", y="C-index (val)", hue="Method")
-    plt.title("Validation C-index Comparison")
-    #plt.ylim(0.5, 1)
-    plt.legend(title="Method", framealpha=0.0)
-    plt.tight_layout()
-    plt.savefig(my_path + "/images/C_val.png")
-
-    # --- Plot IBS (val) ---
-    plt.figure(figsize=(8, 5))
-    sns.barplot(data=df_all, x="Model", y="IBS (val)", hue="Method")
-    plt.title("Validation IBS Comparison (lower is better)")
-    plt.legend(title="Method", framealpha=0.0)
-    plt.tight_layout()
-    plt.savefig(my_path + "/images/IBS.png")
-
-    # --- Plot training time ---
-    plt.figure(figsize=(8, 5))
-    sns.barplot(data=df_all, x="Model", y="Time (s)", hue="Method")
-    plt.title("Training Time by Method")
-    plt.legend(title="Method", framealpha=0.0)
-    plt.tight_layout()
-    plt.savefig(my_path + "/images/Time.png")
-
-def plot_results_relative(df_all):
-    import os
-    my_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-    sns.set_theme(style="whitegrid", font_scale=1.2)
-
-    # --- Plot C-index (train) ---
-    plt.figure(figsize=(8, 5))
-    sns.barplot(data=df_all, x="Model", y="C-index (train) to Baseline", hue="Method")
-    plt.title("Validation C-index Comparison")
-    #plt.ylim(0.5, 1)
-    plt.legend(title="Method", framealpha=0.0)
-    plt.tight_layout()
-    plt.savefig(my_path + "/images/C_train_rel.png")
-
-    # --- Plot C-index (val) ---
-    plt.figure(figsize=(8, 5))
-    sns.barplot(data=df_all, x="Model", y="C-index (val) to Baseline", hue="Method")
-    plt.title("Validation C-index Comparison")
-    #plt.ylim(0.5, 1)
-    plt.legend(title="Method", framealpha=0.0)
-    plt.tight_layout()
-    plt.savefig(my_path + "/images/C_val_rel.png")
-
-    # --- Plot IBS (val) ---
-    plt.figure(figsize=(8, 5))
-    sns.barplot(data=df_all, x="Model", y="IBS (val) to Baseline", hue="Method")
-    plt.title("Validation IBS Comparison (lower is better)")
-    plt.legend(title="Method", framealpha=0.0)
-    plt.tight_layout()
-    plt.savefig(my_path + "/images/IBS_rel.png")
-
-    # --- Plot training time ---
-    plt.figure(figsize=(8, 5))
-    sns.barplot(data=df_all, x="Model", y="Time (s) to Baseline", hue="Method")
-    plt.title("Training Time by Method")
-    plt.legend(title="Method", framealpha=0.0)
-    plt.tight_layout()
-    plt.savefig(my_path + "/images/Time_rel.png")
 
 def baselines_evaluate_embeddings(dataset='METABRIC', normalize=True, test_size=0.2, random_state=42, embeddings_flag=None):
     """Run all baselines on raw data and embeddings and collect results."""
@@ -131,18 +52,27 @@ def baselines_evaluate_embeddings(dataset='METABRIC', normalize=True, test_size=
         print("Extract TARTE embeddings ...")
         X_train, X_val = get_embeddings_tarte(X_train, X_val)
         X_train_sk, X_val_sk = X_train, X_val
+        dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        X_train.to_pickle(os.path.join(dir, "tfm", "TARTE", "X_train_tarte.pkl"))
+        X_val.to_pickle("X_val_tarte.pkl")
         print("Run Baselines on embeddings")
     elif embeddings_flag=="dummy":
         print(f"\n>>> TARTE Embeddings with dummy target\n")
         print("Extract TARTE embeddings with dummy y ...")
         X_train, X_val = get_embeddings_dummy_tarte(X_train, X_val)
         X_train_sk, X_val_sk = X_train, X_val
+        dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        X_train.to_pickle(os.path.join(dir, "tfm", "TARTE", "X_train_tarte.pkl"))
+        X_val.to_pickle("X_val_tarte.pkl")
         print("Run Baselines on embeddings")
     elif embeddings_flag == "combi":
         print(f"\n>>> TARTE Embeddings for time and event combined\n")
         print("Extract TARTE embeddings with time and event combined...")
         X_train, X_val = get_embeddings_combination_tarte(X_train, X_val, t_train, e_train)
         X_train_sk, X_val_sk = X_train, X_val
+        dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        X_train.to_pickle(os.path.join(dir, "tfm", "TARTE", "X_train_tarte.pkl"))
+        X_val.to_pickle("X_val_tarte.pkl")
         print("Run Baselines on embeddings")
     else:
         print(f"\n>>> Use raw data for baseline predictions\n")
@@ -150,6 +80,7 @@ def baselines_evaluate_embeddings(dataset='METABRIC', normalize=True, test_size=
     results = []
 
     # 1. Cox Proportional Hazards
+    print("Cox")
     start_time = time.time()
     try:
         cph = train_cox_model(X_train, t_train, e_train)
@@ -170,6 +101,7 @@ def baselines_evaluate_embeddings(dataset='METABRIC', normalize=True, test_size=
                         "IBS (val)": "Error", "Time (s)": "-"})
 
     # 2. XGBoost Survival
+    print("XGBoost")
     start_time = time.time()
     try:
         model_xgb = train_xgboost_model(X_train_sk, y_train_sk)
@@ -190,6 +122,7 @@ def baselines_evaluate_embeddings(dataset='METABRIC', normalize=True, test_size=
                         "IBS (val)": "Error", "Time (s)": "-"})
 
     # 3. DeepSurv
+    print("DeepSurv")
     start_time = time.time()
     try:
         model_ds, device = train_deepsurv_model(X_train, t_train, e_train, epochs=100)
@@ -210,6 +143,7 @@ def baselines_evaluate_embeddings(dataset='METABRIC', normalize=True, test_size=
                         "IBS (val)": "Error", "Time (s)": "-"})
 
     # 4. Random Survival Forest
+    print("RSF")
     start_time = time.time()
     try:
         model_rsf = train_rsf_model(X_train_sk, y_train_sk, n_estimators=200)
@@ -232,11 +166,10 @@ def baselines_evaluate_embeddings(dataset='METABRIC', normalize=True, test_size=
     return results
 
 if __name__ == "__main__":
-    raw_results = baselines_evaluate_embeddings(embeddings_flag=None)
-    emb_results = baselines_evaluate_embeddings(embeddings_flag="emb")
-    dummy_results = baselines_evaluate_embeddings(embeddings_flag="dummy")
-    combi_results = baselines_evaluate_embeddings(embeddings_flag="combi")
-
+    raw_results = baselines_evaluate_embeddings(embeddings_flag=None, dataset='SEER')
+    #emb_results = baselines_evaluate_embeddings(embeddings_flag="emb", dataset='SEER')
+    #dummy_results = baselines_evaluate_embeddings(embeddings_flag="dummy", dataset='SEER')
+    #combi_results = baselines_evaluate_embeddings(embeddings_flag="combi", dataset='SEER')
 
     # Combine results with a method column
     def combine_results(results_dicts, method_name):
@@ -246,9 +179,9 @@ if __name__ == "__main__":
 
     all_results = pd.concat([
         combine_results(raw_results, "Raw"),
-        combine_results(emb_results, "TARTE Embeddings"),
-        combine_results(dummy_results, "TARTE Embeddings with dummy y"),
-        combine_results(combi_results, "TARTE Embeddings with time and event combined")
+        #combine_results(emb_results, "TARTE Embeddings"),
+        #combine_results(dummy_results, "TARTE Embeddings with dummy y"),
+        #combine_results(combi_results, "TARTE Embeddings with time and event combined")
     ])
 
     # Define metrics

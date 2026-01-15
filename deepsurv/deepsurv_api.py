@@ -1,3 +1,7 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import TensorDataset, DataLoader
 import numpy as np
 import pandas as pd
 
@@ -7,9 +11,6 @@ import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 
 from lifelines import KaplanMeierFitter
-
-from metrics.calibration import integrated_brier_score as nfg_integrated_brier
-from metrics.discrimination import truncated_concordance_td as nfg_cindex_td
 
 class DeepSurvTorch(nn.Module):
     """Deep Cox Proportional Hazards Network."""
@@ -33,8 +34,10 @@ class DeepSurvTorch(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-
-class DeepSurvFG():
+class DeepSurv:
+    """
+    API Wrapper for DeepSurv to match NeuralFineGray/DeSurv interface.
+    """
     def __init__(self, layers=[100, 100], dropout=0.3, lr=1e-3, weight_decay=1e-4, cuda=True):
         self.layers = layers
         self.dropout = dropout
@@ -185,4 +188,3 @@ class DeepSurvFG():
         # Avoid numerical issues
         surv_probs = np.power(s0_t, risk_exp)
         return surv_probs
-    

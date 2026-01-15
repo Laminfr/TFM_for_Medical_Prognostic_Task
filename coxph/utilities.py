@@ -1,12 +1,14 @@
 import numpy as np
-import pandas as pd
+import warnings
 from lifelines import CoxPHFitter
+from lifelines.utils import ConvergenceWarning
+warnings.filterwarnings("ignore", category=ConvergenceWarning)
+
 
 # Import metrics from neuralfg repository
 import sys
 from metrics.calibration import integrated_brier_score
 from metrics.discrimination import truncated_concordance_td
-
 
 def train_cox_model(X_train, T_train, E_train, penalizer=0.01):
     """Train Cox Proportional Hazards model."""
@@ -72,10 +74,10 @@ def evaluate_model(cph, X_train, X_val, t_train, t_val, e_train, e_val):
     t_val_filtered = t_val.values[valid_mask]
     e_val_filtered = e_val.values[valid_mask]
     X_val_filtered = X_val[valid_mask]
-    
-    print(f"Validation samples for IBS: {len(t_val_filtered)}/{len(t_val)} " +
-          f"({100*len(t_val_filtered)/len(t_val):.1f}%)")
-    
+
+    #print(f"Validation samples for IBS: {len(t_val_filtered)}/{len(t_val)} " +
+    #      f"({100*len(t_val_filtered)/len(t_val):.1f}%)")
+
     if len(t_val_filtered) == 0:
         print("WARNING: No validation samples within training time range!")
         return {
@@ -83,7 +85,7 @@ def evaluate_model(cph, X_train, X_val, t_train, t_val, e_train, e_val):
             "c_index_val": c_index_val,
             "ibs_val": np.nan
         }
-    
+
     # Create safe time grid
     max_time_safe = max_time_train * 0.95
     event_times = t_val_filtered[e_val_filtered > 0]
@@ -96,8 +98,8 @@ def evaluate_model(cph, X_train, X_val, t_train, t_val, e_train, e_val):
     
     time_grid = np.unique(time_grid)
     
-    print(f"Time grid range: [{time_grid.min():.2f}, {time_grid.max():.2f}]")
-    print(f"Max time (train): {max_time_train:.2f}")
+    #print(f"Time grid range: [{time_grid.min():.2f}, {time_grid.max():.2f}]")
+    #print(f"Max time (train): {max_time_train:.2f}")
     
     # Get survival predictions for filtered validation set
     surv_funcs = cph.predict_survival_function(X_val_filtered, times=time_grid)
