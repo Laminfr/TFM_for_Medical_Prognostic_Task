@@ -38,7 +38,8 @@ from typing import Dict, List, Optional, Tuple
 # CONFIGURATION
 # ==========================================
 PROJECT_ROOT = Path(__file__).parent.parent
-RESULTS_DIR = PROJECT_ROOT / 'results' / 'survival_stacking'
+#RESULTS_DIR = PROJECT_ROOT / 'results' / 'survival_stacking'
+RESULTS_DIR = Path("/vol/miltank/users/frou/Documents/TFM_for_medical_prognosis/surv_stack_results/summary")
 
 # Dataset configurations
 DATASET_CONFIG = {
@@ -62,8 +63,10 @@ DATASET_CONFIG = {
 # Method display names and order
 METHODS = [
     ('survstack_raw', 'SurvStack-Raw'),
-    ('survstack_emb', 'SurvStack-Emb'),
+    ('survstack_tabicl_emb', 'SurvStack-TabICL-Emb'),
+    ("survstack_tabpfn_emb", "SurvStack-TabPFN-Emb"),
     ('survstack_tabicl', 'SurvStack-TabICL'),
+    ("survstack_tabpfn", "SurvStack-TabPFN"),
     ('coxph', 'CoxPH'),
     ('xgboost', 'XGBoost'),
     ('deepsurv', 'DeepSurv'),
@@ -71,9 +74,11 @@ METHODS = [
 
 # Colors - distinguish survival stacking (warm) from baselines (cool)
 METHOD_COLORS = {
-    'survstack_raw': '#e74c3c',      # Red
-    'survstack_emb': '#c0392b',      # Dark Red
-    'survstack_tabicl': '#f39c12',   # Orange
+    'survstack_raw': '#e74c3c',             # Red
+    'survstack_tabicl_emb': '#c0392b',      # Dark Red
+    'survstack_tabpfn_emb':"#CED109",
+    'survstack_tabicl': '#f39c12',            # Orange
+    'survstack_tabpfn':"#888f47",
     'coxph': '#3498db',              # Blue
     'xgboost': '#9b59b6',            # Purple
     'deepsurv': '#2ecc71',           # Green
@@ -82,8 +87,10 @@ METHOD_COLORS = {
 # Hatching patterns for baselines (to distinguish from survival stacking)
 METHOD_HATCHES = {
     'survstack_raw': '',
-    'survstack_emb': '',
+    'survstack_tabicl_emb': '',
+    'survstack_tabpfn_emb': '',
     'survstack_tabicl': '',
+    'survstack_tabpfn': '',
     'coxph': '///',
     'xgboost': '///',
     'deepsurv': '///',
@@ -379,7 +386,11 @@ def plot_discrimination_vs_calibration(all_data: Dict, plots_dir: Path):
     ax.set_facecolor('#fafafa')
     
     dataset_markers = {'metabric': 'o', 'pbc': 's', 'support': '^'}
-    marker_sizes = {'survstack_raw': 200, 'survstack_emb': 200, 'survstack_tabicl': 200,
+    marker_sizes = {'survstack_raw': 200, 
+                    'survstack_emb': 200, 
+                    "survstack_tabpfn_emb": 200,
+                    'survstack_tabicl': 200,
+                    "survstack_tabpfn": 200,
                     'coxph': 120, 'xgboost': 120, 'deepsurv': 120}
     
     all_c_indices = []

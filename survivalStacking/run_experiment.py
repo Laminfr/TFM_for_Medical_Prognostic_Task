@@ -93,8 +93,8 @@ def load_dataset_for_survival(
         return X, T, E, feature_names
         
     elif dataset == 'PBC':
-        from auton_survival.datasets import load_dataset as load_dsm
-            
+        # from auton_survival.datasets import load_dataset as load_dsm
+        from DeepSurvivalMachines.dsm.datasets import load_dataset as load_dsm
         from sklearn.preprocessing import StandardScaler
         
         X_raw, T, E = load_dsm('PBC')
@@ -107,36 +107,48 @@ def load_dataset_for_survival(
             
         return X, T.astype(float), E.astype(int), feature_names
     
+    # elif dataset == 'SUPPORT':
+    #     from auton_survival.datasets import load_dataset as load_dsm
+            
+    #     from sklearn.preprocessing import StandardScaler, OrdinalEncoder
+    #     from sklearn.impute import SimpleImputer
+        
+    #     outcomes, features = load_dsm('SUPPORT')
+    #     T = outcomes['time'].values.astype(float)
+    #     E = outcomes['event'].values.astype(int)
+    #     feature_names = features.columns.tolist()
+        
+    #     # Encode categorical features and impute missing values
+    #     features_encoded = features.copy()
+    #     for col in features_encoded.columns:
+    #         if features_encoded[col].dtype == 'object':
+    #             features_encoded[col] = features_encoded[col].fillna('missing')
+    #             features_encoded[col] = OrdinalEncoder().fit_transform(
+    #                 features_encoded[[col]]
+    #             ).flatten()
+        
+    #     # Impute remaining numerical NaNs with median
+    #     imputer = SimpleImputer(strategy='median')
+    #     features_imputed = imputer.fit_transform(features_encoded.values)
+        
+    #     if normalize:
+    #         X = StandardScaler().fit_transform(features_imputed)
+    #     else:
+    #         X = features_imputed
+            
+    #     return X, T, E, feature_names
     elif dataset == 'SUPPORT':
-        from auton_survival.datasets import load_dataset as load_dsm
-            
-        from sklearn.preprocessing import StandardScaler, OrdinalEncoder
-        from sklearn.impute import SimpleImputer
-        
-        outcomes, features = load_dsm('SUPPORT')
-        T = outcomes['time'].values.astype(float)
-        E = outcomes['event'].values.astype(int)
-        feature_names = features.columns.tolist()
-        
-        # Encode categorical features and impute missing values
-        features_encoded = features.copy()
-        for col in features_encoded.columns:
-            if features_encoded[col].dtype == 'object':
-                features_encoded[col] = features_encoded[col].fillna('missing')
-                features_encoded[col] = OrdinalEncoder().fit_transform(
-                    features_encoded[[col]]
-                ).flatten()
-        
-        # Impute remaining numerical NaNs with median
-        imputer = SimpleImputer(strategy='median')
-        features_imputed = imputer.fit_transform(features_encoded.values)
-        
+        from DeepSurvivalMachines.dsm.datasets import load_dataset as load_dsm
+        from sklearn.preprocessing import StandardScaler
+
+        X_raw, T, E, feature_names = load_dsm('SUPPORT', normalize=False)
+
         if normalize:
-            X = StandardScaler().fit_transform(features_imputed)
+            X = StandardScaler().fit_transform(X_raw)
         else:
-            X = features_imputed
-            
-        return X, T, E, feature_names
+            X = X_raw
+
+        return X, np.asarray(T, dtype=float), np.asarray(E, dtype=int), feature_names
         
     else:
         raise ValueError(f"Unknown dataset: {dataset}")
@@ -186,8 +198,73 @@ def apply_tabicl_embeddings(
             print(f"WARNING: TabICL not available ({e}). Using raw features.")
         return X_train, X_val, X_test
 
-def apply_tabpfn_embeddings():
-    pass
+def apply_tabpfn_embeddings(X_train: np.ndarray,
+    X_val: np.ndarray,
+    X_test: np.ndarray,
+    E_train: np.ndarray,
+    mode: str = "deep+raw",
+    verbose: bool = True,
+    n_estimators: int = 1,
+    n_fold: int = 0,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    if mode == "raw":
+        return X_train, X_val, X_test
+
+    try:
+        from tabpfn_extensions import TabPFNClassifier
+        from tabpfn_extensions.embedding import TabPFNEmbedding
+
+        use_deep = "deep" in mode
+        concat_raw = "+raw" in mode
+
+        # Defensive: TabPFNClassifier expects finite values
+        if not (np.isfinite(X_train).all() and np.isfinite(X_val).all() and np.isfinite(X_test).all()):
+            raise ValueError("Non-finite values found in X. Please impute/clean before TabPFN embeddings.")
+
+        y_train = E_train.astype(int)
+
+        clf = TabPFNClassifier(n_estimators=n_estimators)
+
+        # n_fold=0: fit once on training set; n_fold>0: CV embeddings on training set (slower)
+        embedding_extractor = TabPFNEmbedding(tabpfn_clf=clf, n_fold=n_fold)
+
+        # Fit on training fold only
+        embedding_extractor.fit(X_train, y_train)
+
+        # IMPORTANT:
+        # - For embeddings of samples that are part of the fitted data, use data_source="train"
+        # - For embeddings of held-out samples (val/test), use data_source="test"
+        train_emb = embedding_extractor.get_embeddings(
+            X_train, y_train, X_train, data_source="train"
+        )
+        val_emb = embedding_extractor.get_embeddings(
+            X_train, y_train, X_val, data_source="test"
+        )
+        test_emb = embedding_extractor.get_embeddings(
+            X_train, y_train, X_test, data_source="test"
+        )
+
+        if not use_deep:
+            # If someone calls mode='raw' we'd have returned earlier.
+            # This branch is just a safety net.
+            return X_train, X_val, X_test
+
+        if concat_raw:
+            X_train_out = np.concatenate([X_train, train_emb], axis=1)
+            X_val_out = np.concatenate([X_val, val_emb], axis=1)
+            X_test_out = np.concatenate([X_test, test_emb], axis=1)
+        else:
+            X_train_out, X_val_out, X_test_out = train_emb, val_emb, test_emb
+
+        if verbose:
+            print(f"TabPFN embeddings shapes: train={train_emb.shape}, val={val_emb.shape}, test={test_emb.shape}")
+
+        return X_train_out, X_val_out, X_test_out
+
+    except ImportError as e:
+        if verbose:
+            print(f"WARNING: TabPFN embeddings not available ({e}). Using raw features.")
+        return X_train, X_val, X_test
 
 def apply_tarte_embeddings(
     X_train: np.ndarray,
@@ -397,7 +474,14 @@ def run_cv_experiment(
             )
         elif model == "TabPFN":
             # Apply TabPFN embeddings
-            X_train_emb, X_val_emb, X_test_emb = apply_tabpfn_embeddings()
+            X_train_emb, X_val_emb, X_test_emb = apply_tabpfn_embeddings(
+                X_train, X_val, X_test_fold,
+                E_train,
+                mode=tfm_mode,
+                verbose=(verbose and fold_idx == 0),
+                n_estimators=config.get("tabpfn_n_estimators", 1),
+                n_fold=config.get("tabpfn_n_fold", 0),
+            )
         elif model == "TARTE":
             # Apply TARTE embeddings
             X_train_emb, X_val_emb, X_test_emb = apply_tarte_embeddings(
