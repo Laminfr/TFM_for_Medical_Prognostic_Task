@@ -9,6 +9,7 @@ Computes standard survival analysis metrics:
 
 import numpy as np
 from typing import Tuple, Dict, Optional, Union
+from scipy.stats import ttest_rel
 import warnings
 
 
@@ -327,3 +328,67 @@ def print_metrics(metrics: Dict[str, float], model_name: str = "Model"):
             print(f"  {key}: {value:.4f}")
     print(f"  IBS: {metrics.get('ibs', 0):.4f}")
     print("-" * 40)
+
+
+def pairwise_t_test_vs_baseline(fold_results, baseline='TabICL', baseline_method=None, metric='c_index_q50'):
+    """
+    Perform pairwise t-tests of all approaches against a baseline method.
+    """
+    if baseline_method is None:
+        raise ValueError(
+            "baseline_method must be provided (e.g., 'tabpfn_direct' or 'xgboost_raw')."
+        )
+    # 1. Identify all competing approaches (excluding baseline)
+    all_approaches = set()
+    baselines_approaches = set()
+    for fold in fold_results:
+        for model_family, methods in fold.items():
+            if model_family != baseline:
+                for method_name in methods.keys():
+                    all_approaches.add((model_family, method_name))
+
+
+    # 2. Collect paired fold-wise values
+    p_values = {}
+
+    for model_family, method_name in all_approaches:
+        baseline_array = []
+        approach_array = []
+
+        for fold in fold_results:
+            try:
+                baseline_metrics = fold[baseline][baseline_method][metric]
+                approach_metrics = fold[model_family][method_name][metric]
+
+                if (not isinstance(baseline_metrics, dict)) or ('error' in baseline_metrics):
+                    continue
+                if (not isinstance(approach_metrics, dict)) or ('error' in approach_metrics):
+                    continue
+
+                baseline_val = baseline_metrics[metric]
+                approach_val = approach_metrics[metric]
+
+                baseline_array.append(baseline_val)
+                approach_array.append(approach_val)
+            except KeyError:
+                # skip folds where one of the values is missing
+                continue
+
+        # 3. Run paired t-test if enough folds
+        if len(baseline_array) >= 2:
+            t_stat, p_val = ttest_rel(baseline_array, approach_array)
+            p_values[f'{model_family}:{method_name}'] = {
+                'baseline_mean': np.mean(baseline_array),
+                'method_mean': np.mean(approach_array),
+                'mean_diff': np.mean(np.array(approach_array) - np.array(baseline_array)),
+                't_stat': t_stat,
+                'p_value': p_val,
+                'n_folds': len(baseline_array)
+            }
+        else:
+            p_values[f'{model_family}:{method_name}'] = {
+                'p_value': np.nan,
+                'n_folds': len(baseline_array)
+            }
+
+    return p_values

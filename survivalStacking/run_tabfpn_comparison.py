@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 """
-Experiment: TabICL Direct Classification vs Embedding Extraction
+Experiment: TabPFN Direct Classification vs Embedding Extraction
 
-This script compares two approaches for using TabICL in survival stacking:
-1. TabICL as direct binary classifier (no embeddings)
-2. TabICL for embedding extraction + XGBoost classifier
+This script compares two approaches for using TabPFN in survival stacking:
+1. TabPFN as direct binary classifier (no embeddings)
+2. TabPFN for embedding extraction + XGBoost classifier
 
 Usage:
-    python -m survivalStacking.run_tabicl_comparison --dataset METABRIC
-    python -m survivalStacking.run_tabicl_comparison --dataset PBC --cv 5
+    python -m survivalStacking.run_tabpfn_comparison --dataset METABRIC
+    python -m survivalStacking.run_tabpfn_comparison --dataset PBC --cv 5
 """
 
 import os
@@ -52,8 +52,8 @@ def run_single_fold_comparison(
     
     Returns metrics for:
     - 'xgboost_raw': XGBoost on raw features
-    - 'xgboost_embeddings': XGBoost on TabICL embeddings  
-    - 'tabicl_direct': TabICL as direct classifier
+    - 'xgboost_embeddings': XGBoost on TabPFN embeddings  
+    - 'tabpfn_direct': TabPFN as direct classifier
     """
     results = {}
     
@@ -111,21 +111,19 @@ def run_single_fold_comparison(
             print(f"      C-Index: {results_baseline[f'{baseline}_raw'].get('c_index_q50', 0):.4f}, "
                   f"IBS: {results_baseline[f'{baseline}_raw'].get('ibs', 0):.4f}")
 
-        # === Approach 2: XGBoost on TabICL embeddings ===
+        # === Approach 2: XGBoost on TabPFN embeddings ===
         if verbose:
-            print(f"  [2/2] {baseline} on TabICL embeddings...")
+            print(f"  [2/2] {baseline} on TabPFN embeddings...")
 
         try:
-            from datasets.tabicl_embeddings import apply_tabicl_embedding
-
-            X_train_emb, _, X_test_emb, _ = apply_tabicl_embedding(
+            from survivalStacking.tools import apply_tabpfn_embeddings
+            X_train_emb, _, X_test_emb = apply_tabpfn_embeddings(
                 X_train, X_train[:10], X_test,  # Dummy validation
                 E_train,
-                feature_names=feature_names,
-                use_deep_embeddings=True,
-                concat_with_raw=True,  # deep+raw mode
-                verbose=False
-            )
+                mode = "deep+raw",
+                verbose=True,
+                n_estimators = 1,
+                n_fold = 0)
 
             model_baseline_emb = SurvivalStackingModel(
                 classifier=baseline,
@@ -152,40 +150,41 @@ def run_single_fold_comparison(
         results[baseline] = results_baseline
     
 
-    # === Approach 3: TabICL direct classification ===
-    tabicl_results = {}
+    # === Approach 3: TabPFN direct classification ===
+    tabpfn_results = {}
     if verbose:
-        print(f"  [1/1] TabICL direct classifier...")
+        print(f"  [1/1] TaPFN direct classifier...")
     
     try:
-        model_tabicl = SurvivalStackingModel(
-            classifier='tabicl',
+        model_tabpfn = SurvivalStackingModel(
+            classifier='tabpfn',
             classifier_params={
-                'n_estimators': config.get('tabicl_n_estimators', 4),
+                'n_estimators': config.get('tabpfn_n_estimators', 4),
                 'device': config.get('device', 'cuda'),
                 'max_context_samples': config.get('max_context_samples', 2000),
+                "random_state":config.get('random_state', 42),
                 'verbose': False
             },
             **model_config
         )
-        model_tabicl.fit(X_train, T_train, E_train, verbose=False)
+        model_tabpfn.fit(X_train, T_train, E_train, verbose=False)
 
-        eval_times = model_tabicl.transformer_.get_interval_times()
-        survival_tabicl = model_tabicl.predict_survival(X_test)
+        eval_times = model_tabpfn.transformer_.get_interval_times()
+        survival_tabpfn = model_tabpfn.predict_survival(X_test)
         
-        tabicl_results['tabicl_direct'] = compute_survival_metrics(
-            T_test, E_test, survival_tabicl, eval_times, T_train, E_train
+        tabpfn_results['tabpfn_direct'] = compute_survival_metrics(
+            T_test, E_test, survival_tabpfn, eval_times, T_train, E_train
         )
         
         if verbose:
-            print(f"      C-Index: {tabicl_results['tabicl_direct'].get('c_index_q50', 0):.4f}, "
-                  f"IBS: {tabicl_results['tabicl_direct'].get('ibs', 0):.4f}")
+            print(f"      C-Index: {tabpfn_results['tabpfn_direct'].get('c_index_q50', 0):.4f}, "
+                  f"IBS: {tabpfn_results['tabpfn_direct'].get('ibs', 0):.4f}")
     except Exception as e:
         if verbose:
             print(f"      FAILED: {e}")
-        tabicl_results['tabicl_direct'] = {'error': str(e)}
+        tabpfn_results['tabpfn_direct'] = {'error': str(e)}
 
-    results['TabICL'] = tabicl_results
+    results['TabPFN'] = tabpfn_results
     
     return results
 
@@ -238,11 +237,11 @@ def run_cv_comparison(
     
     # Aggregate results
     summary = {}
-    for baseline in (ALL_BASELINES+['TabICL']):
+    for baseline in (ALL_BASELINES+['TabPFN']):
         for approach in ['xgboost_raw', 'xgboost_embeddings',
                          'logistic_raw', 'logistic_embeddings',
                          'lightgbm_raw', 'lightgbm_embeddings',
-                         'tabicl_direct']:
+                         'tabpfn_direct']:
 
             approach_results = []
             for fold in fold_results:
@@ -262,8 +261,7 @@ def run_cv_comparison(
                     'n_folds': len(approach_results)
                 }
 
-    t_test_results = pairwise_t_test_vs_baseline(fold_results, baseline='TabICL', metric='c_index_q50')
-
+    t_test_results = pairwise_t_test_vs_baseline(fold_results, baseline='TabPFN', baseline_method="tabpfn_direct", metric='c_index_q50')
     return {
         'dataset': dataset,
         'n_folds': n_folds,
@@ -319,7 +317,7 @@ def print_summary(results: Dict):
                 return 'ns'
 
         if t_tests:
-            print(f"\nPaired t-tests vs baseline (TabICL):")
+            print(f"\nPaired t-tests vs baseline (TabPFN):")
             print(f"{'Method':<30} {'Mean diff':<12} {'p-value':<10} {'Sig'}")
             print("-" * 65)
 
@@ -335,7 +333,7 @@ def print_summary(results: Dict):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Compare TabICL approaches in Survival Stacking'
+        description='Compare TabPFN approaches in Survival Stacking'
     )
     parser.add_argument('--dataset', type=str, default='PBC',
                         choices=['METABRIC', 'PBC', 'SUPPORT'],
@@ -343,7 +341,7 @@ def main():
     parser.add_argument('--cv', type=int, default=5,
                         help='Number of CV folds')
     parser.add_argument('--device', type=str, default='cuda',
-                        help='Device for TabICL (cuda/cpu)')
+                        help='Device for TabPFN (cuda/cpu)')
     parser.add_argument('--output', type=str, default=None,
                         help='Output JSON file for results')
     
@@ -355,7 +353,7 @@ def main():
         'max_depth': 5,
         'learning_rate': 0.05,
         'device': args.device,
-        'tabicl_n_estimators': 4,
+        'tabpfn_n_estimators': 4,
         'max_context_samples': 2000
     }
     
@@ -372,7 +370,7 @@ def main():
     if args.output:
         output_path = Path(args.output)
     else:
-        output_dir = PROJECT_ROOT / 'results' / 'tabicl_comparison'
+        output_dir = PROJECT_ROOT / 'results' / 'tabpfn_comparison'
         output_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         output_path = output_dir / f'{args.dataset}_comparison_{timestamp}.json'

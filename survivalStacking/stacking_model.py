@@ -207,7 +207,7 @@ class SurvivalStackingModel(BaseEstimator):
                 "random_state": self.random_state,
             }
             default_params.update(self.classifier_params)
-            return TabPFNClassifier(**default_params)
+            return TabPFNClassifier(device = default_params.get('device', 'cuda'), n_estimators = default_params.get('n_estimators', 4))
 
         else:
             raise ValueError(f"Unknown classifier: {self.classifier}")
