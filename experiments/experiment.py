@@ -1182,59 +1182,8 @@ class TARTEExperiment(Experiment):
         )
 
 
-class DeepSurvExperiment(NFGExperiment):
-
-    def _fit_(self, x, t, e, x_val, t_val, e_val, hyperparameter, cause_specific):  
-        # Import dynamically to avoid circular dependencies
-        from deepsurv.deepsurv_api import DeepSurvFG
-        # Extract hypers
-        epochs = hyperparameter.pop('epochs', 1000)
-        batch = hyperparameter.pop('batch', 256)
-        lr = hyperparameter.pop('learning_rate', 0.001)
-        layers = hyperparameter.pop('layers', [100, 100])
-        dropout = hyperparameter.pop('dropout', 0.3)
-        patience = hyperparameter.pop('patience_max', 10)
-
-        model = DeepSurvFG(layers=layers, dropout=dropout, lr=lr, cuda=torch.cuda.is_available())
-        
-        # Fit model
-        model.fit(x, t, e, 
-                  val_data=(x_val, t_val, e_val),
-                  n_iter=epochs, bs=batch, patience_max=patience)
-        
-        return model
-
-    def _nll_(self, model, x, t, e, *train):
-        # For Cox models, we usually minimize NLL (Cox Loss)
-        # But for the Experiment class metrics, we often use IBS or C-index proxy 
-        # if direct NLL isn't exposed perfectly.
-        # Here we calculate the Cox Partial Likelihood on the dev set.
-        
-        if isinstance(x, pd.DataFrame): x = x.values
-        if isinstance(t, pd.Series): t = t.values
-        if isinstance(e, pd.Series): e = e.values
-        
-        model.model.eval()
-        with torch.no_grad():
-            x_t = torch.FloatTensor(x).to(model.device)
-            t_t = torch.FloatTensor(t).to(model.device)
-            e_t = torch.FloatTensor(e).to(model.device)
-            loss = model._cox_loss(model.model(x_t), t_t, e_t)
-            
-        return loss.item()
-
-    def _predict_(self, model, x, r, index):
-        # The Experiment class expects a DataFrame with MultiIndex columns (Risk, Time)
-        # r is the risk index (usually 1 for single risk)
-        
-        surv_probs = model.predict_survival(x, self.times.tolist())
-        # surv_probs shape is (n_samples, n_times)
-        
-        return pd.DataFrame(
-            surv_probs,
-            columns=pd.MultiIndex.from_product([[r], self.times]),
-            index=index
-        )
+# NOTE: DeepSurvExperiment is defined earlier (line ~668) inheriting from Experiment
+# A duplicate definition that used non-existent DeepSurvFG was removed during cleanup
 
 
 class TabPFN(Experiment):

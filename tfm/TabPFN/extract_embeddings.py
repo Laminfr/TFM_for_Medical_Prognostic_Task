@@ -4,6 +4,9 @@ import numpy as np
 from tabpfn import TabPFNClassifier
 from tabpfn_extensions import TabPFNEmbedding
 
+# Import shared utility function
+from xgb_survival.utilities import wrap_np_to_pandas
+
 """
 Extracts embeddings from a TabPFN model for downstream tasks.
 """
@@ -45,22 +48,4 @@ def get_embeddings_tabpfn(X_train, X_test, t_train, e_train, data_frame_output=T
         return train_embeddings, test_embeddings
     else:
         return train_emb, test_emb
-    
-
-def wrap_np_to_pandas(X, index=None, prefix="x"):
-    if isinstance(X, (pd.DataFrame, pd.Series)):
-        return X
-
-    X = np.asarray(X)
-
-    if X.ndim == 1:
-        return pd.Series(X, index=index)
-
-    if X.ndim == 2:
-        n_cols = X.shape[1]
-        cols = [f"{prefix}{i}" for i in range(n_cols)]
-        return pd.DataFrame(X, columns=cols, index=index)
-
-    raise ValueError("Input must be 1D or 2D numpy array or pandas object.")
-
 

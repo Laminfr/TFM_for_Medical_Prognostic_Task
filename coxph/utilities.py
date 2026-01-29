@@ -9,6 +9,7 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning)
 import sys
 from metrics.calibration import integrated_brier_score
 from metrics.discrimination import truncated_concordance_td
+from metrics.utils import concordance_index_from_risk_scores
 
 def train_cox_model(X_train, T_train, E_train, penalizer=0.01):
     """Train Cox Proportional Hazards model."""
@@ -24,37 +25,6 @@ def train_cox_model(X_train, T_train, E_train, penalizer=0.01):
     
     return cph
 
-def concordance_index_from_risk_scores(e, t, risk_scores, tied_tol=1e-8):
-    """
-    Compute C-index directly from risk scores (for Cox-like models).
-    Higher risk score should correspond to higher risk (shorter survival).
-    """
-    event = e.values.astype(bool) if hasattr(e, 'values') else e.astype(bool)
-    t = t.values if hasattr(t, 'values') else t
-    n_events = event.sum()
-    
-    if n_events == 0:
-        return np.nan
-    
-    concordant = 0
-    permissible = 0
-    
-    for i in range(len(t)):
-        if not event[i]:
-            continue
-            
-        # Compare with all samples at risk at time t[i]
-        at_risk = t > t[i]
-        
-        # Higher risk score means higher risk (shorter time to event)
-        concordant += (risk_scores[at_risk] < risk_scores[i]).sum()
-        concordant += 0.5 * (np.abs(risk_scores[at_risk] - risk_scores[i]) <= tied_tol).sum()
-        permissible += at_risk.sum()
-    
-    if permissible == 0:
-        return np.nan
-    
-    return concordant / permissible
 
 def evaluate_model(cph, X_train, X_val, t_train, t_val, e_train, e_val):
     """Evaluate Cox model using NeuralFineGray metrics."""

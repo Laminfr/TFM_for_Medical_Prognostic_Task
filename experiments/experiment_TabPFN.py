@@ -10,7 +10,7 @@ warnings.filterwarnings("ignore", message="TypedStorage is deprecated")
 
 from datasets.data_loader import load_and_preprocess_data
 from coxph.utilities import train_cox_model, evaluate_model as evaluate_cox
-from xgboost_baseline.utilities import train_xgboost_model, evaluate_xgboost_model
+from xgb_survival.utilities import train_xgboost_model, evaluate_xgboost_model
 from deepsurv.utilities import train_deepsurv_model, evaluate_deepsurv_model
 from rsf.utilities import train_rsf_model, evaluate_rsf_model
 from tfm.TabPFN.extract_embeddings import get_embeddings_tabpfn

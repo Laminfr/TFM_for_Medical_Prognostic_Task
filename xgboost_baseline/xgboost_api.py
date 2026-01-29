@@ -4,7 +4,7 @@ import xgboost as xgb
 from lifelines import KaplanMeierFitter
 
 from nfg.nfg_api import NeuralFineGray
-from .utilities import train_xgboost_model, evaluate_xgboost_model, summary_output
+from xgb_survival.utilities import train_xgboost_model, evaluate_xgboost_model, summary_output
 from metrics.calibration import integrated_brier_score as nfg_integrated_brier
 from metrics.discrimination import truncated_concordance_td as nfg_cindex_td
 
@@ -172,25 +172,12 @@ class XGBoostFG(NeuralFineGray):
         return 1.0 - self.predict_survival(X, times)
 
 
+# Import shared utility function
+from xgb_survival.utilities import wrap_np_to_pandas
+
 def convert_cpu_numpy(tensor):
     if hasattr(tensor, "detach"):
         tensor = tensor.detach().cpu().numpy()
     else:
         tensor = np.asarray(tensor)
     return tensor
-
-def wrap_np_to_pandas(X, index=None, prefix="x"):
-    if isinstance(X, (pd.DataFrame, pd.Series)):
-        return X
-
-    X = np.asarray(X)
-
-    if X.ndim == 1:
-        return pd.Series(X, index=index)
-
-    if X.ndim == 2:
-        n_cols = X.shape[1]
-        cols = [f"{prefix}{i}" for i in range(n_cols)]
-        return pd.DataFrame(X, columns=cols, index=index)
-
-    raise ValueError("Input must be 1D or 2D numpy array or pandas object.")

@@ -15,6 +15,7 @@ except ImportError:
 
 from metrics.calibration import integrated_brier_score
 from metrics.discrimination import truncated_concordance_td
+from metrics.utils import concordance_index_from_risk_scores
 
 
 def wrap_np_to_pandas(X, index=None, prefix="x"):
@@ -106,43 +107,6 @@ def estimate_survival_from_cox(
     )
 
     return survival_probs
-
-
-def concordance_index_from_risk_scores(e, t, risk_scores, tied_tol=1e-8):
-    """
-    Compute C-index directly from risk scores (for Cox-like models).
-    Higher risk score should correspond to higher risk (shorter survival).
-
-    This is a simpler version that works with scalar risk scores.
-    """
-    event = e.astype(bool)
-    n_events = event.sum()
-
-    if n_events == 0:
-        return np.nan
-
-    concordant = 0
-    permissible = 0
-
-    for i in range(len(t)):
-        if not event[i]:
-            continue
-
-        # Compare with all samples at risk at time t[i]
-        at_risk = t > t[i]
-
-        # Higher risk score means higher risk (shorter time to event)
-        # So we want risk_scores[at_risk] < risk_scores[i] for concordance
-        concordant += (risk_scores[at_risk] < risk_scores[i]).sum()
-        concordant += (
-            0.5 * (np.abs(risk_scores[at_risk] - risk_scores[i]) <= tied_tol).sum()
-        )
-        permissible += at_risk.sum()
-
-    if permissible == 0:
-        return np.nan
-
-    return concordant / permissible
 
 
 def evaluate_xgboost_model(model, X_train, t_train, e_train, X_val, t_val, e_val):

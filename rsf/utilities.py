@@ -5,7 +5,6 @@ from sksurv.ensemble import RandomSurvivalForest
 from sksurv.util import Surv
 
 # Import the shared data loader
-
 from datasets.data_loader import load_and_preprocess_data
 
 # Import metrics from neuralfg repository
@@ -14,21 +13,8 @@ sys.path.insert(0, '/vol/miltank/users/sajb/Project/NeuralFineGray')
 from metrics.calibration import integrated_brier_score
 from metrics.discrimination import truncated_concordance_td
 
-def wrap_np_to_pandas(X, index=None, prefix="x"):
-    if isinstance(X, (pd.DataFrame, pd.Series)):
-        return X
-
-    X = np.asarray(X)
-
-    if X.ndim == 1:
-        return pd.Series(X, index=index)
-
-    if X.ndim == 2:
-        n_cols = X.shape[1]
-        cols = [f"{prefix}{i}" for i in range(n_cols)]
-        return pd.DataFrame(X, columns=cols, index=index)
-
-    raise ValueError("Input must be 1D or 2D numpy array or pandas object.")
+# Import shared utility function
+from xgb_survival.utilities import wrap_np_to_pandas
 
 def train_rsf_model(X_train, t_train, e_train, t_val, e_val, n_estimators=200, max_depth=10, min_samples_split=20, 
                     min_samples_leaf=10, random_state=42):
