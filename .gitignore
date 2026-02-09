@@ -144,9 +144,8 @@ tfm/TARTE/results
 tfm/TARTE/embeddings/
 tfm/TARTE/__pycache__/
 
-# Logs and batch files
+# Logs directories
 logs/
-*.sbatch
 CompetingRisks/logs/
 
 # Results - ignore everything except plots directories
