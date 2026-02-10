@@ -10,11 +10,12 @@ Two environments are available depending on the embedding method:
 
 ```bash
 # Create environment
-conda create -n tabicl_env python=3.10
-conda activate tabicl_env
+conda create -n tab_env python=3.10
+conda activate tab_env
 
-# Install dependencies
-pip install -r requirements/requirements_tabicl_tabpfn.txt
+# setup environment
+cd NeuralFineGray
+python -m setup_tabpfn_tabicl.py --install-deps
 ```
 
 ### TARTE Environment
@@ -24,8 +25,9 @@ pip install -r requirements/requirements_tabicl_tabpfn.txt
 conda create -n tarte_env python=3.11
 conda activate tarte_env
 
-# Install dependencies
-pip install -r requirements/requirements_tarte.txt
+# setup environment
+cd NeuralFineGray
+python -m setup_tarte.py --install-deps
 ```
 
 ### HuggingFace Token (for TabPFN)
@@ -34,7 +36,19 @@ pip install -r requirements/requirements_tarte.txt
 export HF_TOKEN="your_token_here"
 # Or create .env file with: HF_TOKEN=your_token_here
 ```
+### Note
 
+make sure to run 
+```bash  
+cd NeuralFineGray
+python -m setup_tarte.py
+```
+before running TARTE experiments and 
+```bash  
+cd NeuralFineGray
+python -m setup_tabpfn_tabicl.py
+```
+otherwise.
 ## Core Concepts
 
 This framework provides four main experimental pipelines:
