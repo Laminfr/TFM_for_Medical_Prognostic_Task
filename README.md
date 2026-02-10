@@ -15,7 +15,7 @@ conda activate tab_env
 
 # setup environment
 cd NeuralFineGray
-python -m setup_tabpfn_tabicl.py --install-deps
+python -m setup_tabpfn_tabicl --install-deps
 ```
 
 ### TARTE Environment
@@ -27,7 +27,7 @@ conda activate tarte_env
 
 # setup environment
 cd NeuralFineGray
-python -m setup_tarte.py --install-deps
+python -m setup_tarte --install-deps
 ```
 
 ### HuggingFace Token (for TabPFN)
@@ -41,14 +41,15 @@ export HF_TOKEN="your_token_here"
 make sure to run 
 ```bash  
 cd NeuralFineGray
-python -m setup_tarte.py
+python -m setup_tarte
 ```
 before running TARTE experiments and 
 ```bash  
 cd NeuralFineGray
-python -m setup_tabpfn_tabicl.py
+python -m setup_tabpfn_tabicl
 ```
 otherwise.
+
 ## Core Concepts
 
 This framework provides four main experimental pipelines:
