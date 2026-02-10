@@ -158,6 +158,10 @@ results/*/**
 !results/*/plots/**
 !results/*/*/plots/
 !results/*/*/plots/**
+*.pickle
 
 # tabICL
 tabICL/
+
+# environment variables
+env.common
