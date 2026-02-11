@@ -159,6 +159,7 @@ results/*/**
 !results/*/*/plots/
 !results/*/*/plots/**
 *.pickle
+*.csv
 
 # tabICL
 tabICL/

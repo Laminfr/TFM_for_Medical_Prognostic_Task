@@ -61,7 +61,6 @@ nvidia-nvjitlink-cu12==12.8.93
 nvidia-nvshmem-cu12==3.4.5
 nvidia-nvtx-cu12==12.8.90
 osqp==1.1.0
-packaging @ file:///home/task_176104885106445/conda-bld/packaging_1761049078006/work
 pandas==3.0.0
 pillow==12.1.0
 plotly==6.5.2

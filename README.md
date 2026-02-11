@@ -10,7 +10,7 @@ Two environments are available depending on the embedding method:
 
 ```bash
 # Create environment
-conda create -n tab_env python=3.10
+conda create -n tab_env python=3.11
 conda activate tab_env
 
 # setup environment

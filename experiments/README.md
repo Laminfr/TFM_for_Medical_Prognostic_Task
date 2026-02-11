@@ -5,25 +5,23 @@ Unified experiment runner for survival analysis models with hyperparameter searc
 ## Quick Start
 
 ```bash
-cd /vol/miltank/users/sajb/Project/NeuralFineGray/experiments
-
 # Run CoxPH on all datasets
-sbatch run_experiment.sbatch all coxph raw
+sbatch experiments/run_experiment.sbatch all coxph raw
 
 # Run specific model on specific dataset
-sbatch run_experiment.sbatch METABRIC deepsurv raw
-sbatch run_experiment.sbatch SUPPORT rsf raw
-sbatch run_experiment.sbatch PBC xgboost raw
-sbatch run_experiment.sbatch METABRIC nfg raw
+sbatch experiments/run_experiment.sbatch METABRIC deepsurv raw
+sbatch experiments/run_experiment.sbatch SUPPORT rsf raw
+sbatch experiments/run_experiment.sbatch PBC xgboost raw
+sbatch experiments/run_experiment.sbatch METABRIC nfg raw
 
 # Run with TabPFN embeddings
-sbatch run_experiment.sbatch METABRIC coxph tabpfn
+sbatch experiments/run_experiment.sbatch METABRIC coxph tabpfn
 ```
 
 ## Usage
 
 ```bash
-sbatch run_experiment.sbatch DATASET MODEL MODE [GRID] [SEED] [FOLD]
+sbatch experiments/run_experiment.sbatch DATASET MODEL MODE [GRID] [SEED] [FOLD]
 ```
 
 ### Arguments (positional)
@@ -69,8 +67,6 @@ Logs saved to `logs/`:
 ## Direct Python Usage
 
 ```bash
-cd /vol/miltank/users/sajb/Project/NeuralFineGray
-
 # Run directly without SLURM
 python -m experiments.run_experiment --dataset METABRIC --model coxph --mode raw
 python -m experiments.run_experiment --dataset all --model xgboost --mode tabpfn --grid-search 50

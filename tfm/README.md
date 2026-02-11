@@ -30,9 +30,9 @@ Each method generates embeddings that are used to enhance 4 baseline survival mo
 
 | Method | Conda Environment | Python Version |
 |--------|------------------|----------------|
-| TabICL | `/vol/miltank/users/sajb/Project/tabicl_env` | 3.10 |
-| TabPFN | `/vol/miltank/users/sajb/Project/tabicl_env` | 3.10 |
-| TARTE  | `/vol/miltank/users/sajb/Project/tarte_env` | 3.11 |
+| TabICL | tab_env | 3.11 |
+| TabPFN | tab_env | 3.11 |
+| TARTE  | tarte_env | 3.11 |
 
 ## Step-by-Step Guide
 
@@ -50,6 +50,19 @@ sbatch tfm/run_tabpfn.sbatch
 # Run TARTE experiments (uses different environment)
 sbatch tfm/run_tarte.sbatch
 ```
+#### Note
+
+make sure to run 
+```bash  
+cd NeuralFineGray
+python -m setup_tarte.py
+```
+before running TARTE experiments and 
+```bash  
+cd NeuralFineGray
+python -m setup_tabpfn_tabicl.py
+```
+before running TabPFN or TabICL experiments.
 
 Each job takes approximately 2-6 hours depending on the method and dataset size.
 
@@ -87,7 +100,7 @@ After experiments complete, generate plots:
 
 ```bash
 # Activate appropriate environment
-source activate /vol/miltank/users/sajb/Project/tabicl_env
+conda activate tab_env
 
 # Generate plots for each method and dataset
 python tfm/visualize_cv_results.py --method tabicl --dataset metabric
@@ -99,7 +112,7 @@ python tfm/visualize_cv_results.py --method tabpfn --dataset pbc
 python tfm/visualize_cv_results.py --method tabpfn --dataset support
 
 # For TARTE (use tarte_env)
-source activate /vol/miltank/users/sajb/Project/tarte_env
+conda activate tarte_env
 python tfm/visualize_cv_results.py --method tarte --dataset metabric
 python tfm/visualize_cv_results.py --method tarte --dataset pbc
 python tfm/visualize_cv_results.py --method tarte --dataset support
@@ -137,7 +150,7 @@ To run a single dataset manually (not via SLURM):
 
 ```bash
 # Activate environment
-source activate /vol/miltank/users/sajb/Project/tabicl_env
+conda activate tab_env
 
 # Run TabICL on METABRIC
 python tfm/run_cv_analysis.py --method tabicl --dataset METABRIC --n-iter 20

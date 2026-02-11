@@ -2,16 +2,16 @@
 #SBATCH --job-name=survstack_benchmark
 #SBATCH --output=survivalStacking/logs/survstack_benchmark-%j.out
 #SBATCH --error=survivalStacking/logs/survstack_benchmark-%j.err
-#SBATCH --partition=universe
-#SBATCH --gres=gpu:1
+#SBATCH --time=24:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
-#SBATCH --time=52:00:00
-
+#SBATCH --qos=master-queuesave
+#SBATCH --gres=gpu:1
+#SBATCH --partition=universe 
 
 # Survival Stacking Full Benchmark
 # Runs all 3 datasets with all methods (6 per dataset)
-
+###############################################################################
 echo "=============================================="
 echo "Survival Stacking Full Benchmark"
 echo "=============================================="
@@ -19,24 +19,45 @@ echo "Started: $(date)"
 echo "Node: $(hostname)"
 echo "Job ID: $SLURM_JOB_ID"
 echo ""
-
-# Activate conda environment (adjust path as needed)
-ml python/anaconda3
-source activate /vol/miltank/users/sajb/Project/tabicl_env
+echo "=============================================="
+echo "Unified Experiment Runner"
+echo "Job ID:      $SLURM_JOB_ID"
+echo "Node:        $(hostname)"
+echo "Date:        $(date)"
+echo "CPUs:        $SLURM_CPUS_PER_TASK"
+echo "Memory:      $SLURM_MEM_PER_NODE MB"
+echo "GPU(s):      ${CUDA_VISIBLE_DEVICES:-none}"
+echo "=============================================="
+###############################################################################
+# Load environment variables
+###############################################################################
+source env.common
+echo "CONDA_ENV_PATH=$CONDA_ENV_PATH"
+echo "PROJECT_ROOT=$PROJECT_ROOT"
+###############################################################################
+# Load Conda (NO conda init)
+###############################################################################
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate $CONDA_ENV_PATH
 
 # HuggingFace token for TabPFN model access
 # Load from .env file (keeps secrets out of version control)
 if [ -f .env ]; then
     export $(grep -v '^#' .env | xargs)
 fi
+###############################################################################
+# Move to project root
+###############################################################################
+cd $PROJECT_ROOT
 
-# Navigate to project root
-cd /vol/miltank/users/sajb/Project/NeuralFineGray
+# Add DeepSurvivalMachines to Python path (it uses internal imports like "from dsm.xxx")
+export PYTHONPATH="${PYTHONPATH:-}:$PROJECT_ROOT/DeepSurvivalMachines"
 
-# Create logs directory if needed
-mkdir -p survivalStacking/logs
+mkdir -p experiments/results
 
-# Parse arguments
+###############################################################################
+# ------------------- Experiment switches -------------------
+###############################################################################
 DATASET=${1:-all}
 CV_FOLDS=${2:-5}
 N_INTERVALS=${3:-20}
@@ -49,7 +70,9 @@ echo "  N Intervals: $N_INTERVALS"
 echo "  Weighting: $WEIGHTING"
 echo ""
 
-# Run the benchmark
+###############################################################################
+# Run experiment
+###############################################################################
 python -m survivalStacking.run_full_benchmark \
     --dataset $DATASET \
     --cv $CV_FOLDS \
@@ -57,7 +80,9 @@ python -m survivalStacking.run_full_benchmark \
     --weighting $WEIGHTING \
     --verbose
 
-# Run visualization
+###############################################################################
+# Generate Visualizations
+###############################################################################
 echo ""
 echo "=============================================="
 echo "Generating Visualizations..."
