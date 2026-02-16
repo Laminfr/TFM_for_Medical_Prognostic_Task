@@ -1,6 +1,6 @@
-# NeuralFineGray
+# TFM for Medical Prognostic Task
 
-Survival analysis framework with Neural Fine-Gray models, Survival Stacking, and foundation model embeddings (TabICL, TabPFN, TARTE).
+Survival analysis framework based on [NeuralFineGray](https://github.com/Jeanselme/NeuralFineGray.git) models, Survival Stacking, and foundation model embeddings (TabICL, TabPFN, TARTE).
 
 ## Environment Setup
 
@@ -122,3 +122,7 @@ All experiments save results to `results/` with organized subdirectories:
 - `results/competing_risks/` - Competing risks benchmarks
 
 Plots are saved in `plots/` subdirectories within each results folder
+https://github.com/SajbenDani
+## Credits
+This project is based on [NeuralFineGray](https://github.com/Jeanselme/NeuralFineGray.git) Copyright (c) 2021 Vincent Jeanselme, developed at TUM (Lab for AI in Medicine) by [Dániel Sajben](https://github.com/SajbenDani), [Amelie Trautwein](https://github.com/ATrtwn) and [Mohamed Amine Frouja](https://github.com/Laminfr) and supervised by Dmitrii Seletkov.
+
